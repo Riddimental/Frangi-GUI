@@ -88,7 +88,7 @@ def hessian_eigen(image, sigma):
 
    return eigenvalues
 
-def my_frangi_filter(image, scale_range=(1, 10), alpha=0.5, beta=0.5, c=0.1):
+def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, c=1):
    # Ensure input image is of type float64
    #image = image.astype(np.float64)
 

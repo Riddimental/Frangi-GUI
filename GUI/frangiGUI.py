@@ -108,7 +108,7 @@ def plot_image():
         nii_2d_image = nii_3d_image[slice_portion,:,:]
         
     # to find the range of the threshold slider
-    max_value = nii_3d_image.max()
+    max_value = nii_2d_image.max()
     
     # rotate the figure 90 degrees and resize
     nii_2d_image = np.rot90(nii_2d_image)
@@ -472,21 +472,24 @@ scale_range_slider = RangeSliderH(frangi_frame, [hVar1, hVar2], Width=150, Heigh
 
 
 # alpha slider
-alpha_label = ctk.CTkLabel(frangi_frame, text="Alpha: 1")
+text_val = "Alpha: {:.2f}".format(alpha_val)
+alpha_label = ctk.CTkLabel(frangi_frame, text=text_val)
 
 
 alpha_slider = ctk.CTkSlider(master=frangi_frame, from_=0.001, to=1,number_of_steps=300, command=change_alpha, width=120)
 alpha_slider.set(1)
 
 # beta slider
-vessel_length_label = ctk.CTkLabel(frangi_frame, text="Beta: 0.01")
+text_val = "Beta: {:.2f}".format(beta_val)
+vessel_length_label = ctk.CTkLabel(frangi_frame, text=text_val)
 
 
 beta_slider = ctk.CTkSlider(master=frangi_frame, from_=0.001, to=2,number_of_steps=300, command=change_beta, width=120)
 beta_slider.set(0.35)
 
 # c slider
-c_label = ctk.CTkLabel(frangi_frame, text="C: 1")
+text_val = "C: {:.2f}".format(c_val)
+c_label = ctk.CTkLabel(frangi_frame, text=text_val)
 
 
 c_slider = ctk.CTkSlider(master=frangi_frame, from_=0.001, to=1,number_of_steps=300, command=change_c, width=120)

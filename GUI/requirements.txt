@@ -1,0 +1,9 @@
+customtkinter
+numpy
+napari[all]
+RangeSlider
+nibabel
+matplotlib
+Pillow
+opencv-python
+virtualenv

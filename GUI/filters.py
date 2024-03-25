@@ -1,5 +1,4 @@
 import math
-import time
 import cv2
 import nibabel as nib
 #np.set_printoptions(threshold=sys.maxsize)
@@ -50,7 +49,7 @@ def gaussian3d(data3D, intensity):
    kernel_size = max(1, math.trunc(intensity))
    if kernel_size % 2 == 0:
       kernel_size += 1  # Make it odd if it's even
-   data = cv2.GaussianBlur(data3D,(intensity,intensity),0)
+   data = ndi.gaussian_filter(data3D, intensity/3)
    return data
 
 def sci_frangi(image3D):
@@ -88,23 +87,27 @@ def hessian_eigen(image, sigma):
 
    return eigenvalues
 
-def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, c=1):
+def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, c=1):
    # Ensure input image is of type float64
    #image = image.astype(np.float64)
+   
+   division = (scale_range[1] - scale_range[0])/steps
 
    # Initialize output vesselness image as floating-point
    vesselness = np.zeros_like(image)
-                              #, dtype=np.float64)
+   
+   print('scales from ', scale_range[0] , ' to ', scale_range[1], ' in ', steps, ' steps.')
 
-   # Iterate over the scale range
-   for scale in range(scale_range[0], scale_range[1] + 1):
+   scale = scale_range[0]
+   while scale <= scale_range[1]:
       # Compute Hessian matrix components
+      # Your code to compute Hessian matrix components goes here
+      print('current scale is: ', scale)
       
       eigenvalues = hessian_eigen(image, scale)
       lambda1 = eigenvalues[..., 0]
       lambda2 = eigenvalues[..., 1]
       lambda3 = eigenvalues[..., 2]
-
 
       epsilon = 1e-6
       # Compute vesselness measure for the current scale in 3D
@@ -113,6 +116,9 @@ def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, c=1):
       S2 = np.sqrt(lambda2**2 + lambda3**2)
       
       vesselness = (1 - np.exp(-1*(Ra**2 / (2 * alpha**2)))) * np.exp(-1*(Rb**2 / (2 * beta**2))) * (1 - np.exp(-1*(S2**2 / (2 * c**2))))
-      float_image_data = np.abs(vesselness)
 
+      # Increment scale by the step size
+      scale += division
+      
+   print("frangi aplied")
    return vesselness

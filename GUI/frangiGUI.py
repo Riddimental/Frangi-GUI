@@ -1,5 +1,3 @@
-import math
-import time
 import os
 import sys
 import customtkinter as ctk
@@ -27,7 +25,7 @@ y = (screen_height - window_height) // 2
 root.geometry(f"{window_width}x{window_height}+{x}+{y}")
 root.title("Frangi MRI")
 # Make the window not resizable
-root.resizable(False, False)
+#root.resizable(False, False)
 
 hVar1 = tk.DoubleVar()
 hVar1.set(0.2)# left handle variable
@@ -46,12 +44,12 @@ if not os.path.exists(temp_directory):
 max_value = 0
 alpha_val = 1
 beta_val=0.35
-c_val = 1
+step_val = 1
 gaussian_intensity = 0
 file_path = ""
 threshold_value = 0
 nii_2d_image = []
-nii_3d_image = []
+nii_3d_image = np.zeros((200, 200, 200))
 nii_3d_image_original = []
 slice_portion = 100
 view_mode = ctk.StringVar(value="Axial")
@@ -81,32 +79,55 @@ def open_napari():
 def refresh_image():
     global selection_image
     # givin the function time to avoid over-refreshing
-    time.sleep(0.0008)
     plot_image = Image.open("temp/plot.jpeg")
     
-    # adjusting the canvas to be the same size as the plot
-    picture_canvas.config(width=plot_image.width, height=plot_image.height)
+    # Get the dimensions of the canvas
+    canvas_width = picture_canvas.winfo_width()
+    canvas_height = picture_canvas.winfo_height()
 
-    # printing the picture in the canvas
+    # Check if the image needs resizing
+    if plot_image.width > canvas_width or plot_image.height > canvas_height:
+        # Calculate the scaling factor to fit the image within the canvas while preserving proportions
+        scale_factor = min(canvas_width / plot_image.width, canvas_height / plot_image.height)
+        new_width = int(plot_image.width * scale_factor)
+        new_height = int(plot_image.height * scale_factor)
+
+        # Resize the image
+        plot_image = plot_image.resize((new_width, new_height))
+
+    # Printing the picture in the canvas
     image = ImageTk.PhotoImage(plot_image)
     picture_canvas.image = image
-    picture_canvas.create_image(0, 0, image=image, anchor="nw")
+    
+    # Assuming canvas_width and canvas_height are the dimensions of the canvas
+    image_width = plot_image.width
+    image_height = plot_image.height
+
+    # Calculate the coordinates to center the image
+    center_x = (canvas_width - image_width) / 2
+    center_y = (canvas_height - image_height) / 2
+
+    # Print the image centered within the canvas
+    picture_canvas.create_image(center_x, center_y, image=image, anchor="nw")
 
 # function to plot the readed .nii image
 def plot_image():
-    global max_value, nii_2d_image, nii_3d_image, slice_portion
+    global max_value, nii_2d_image, nii_3d_image, slice_portion, max_slice
     
     # selecting a slice out of the 3d image
     if(view_mode.get() == "Coronal"): # im the y axis "Coronal"
-        if slice_portion >= 191: slice_portion = 190
+        max_slice = nii_3d_image.shape[1]
+        if slice_portion >= nii_3d_image.shape[1]: slice_portion = (nii_3d_image.shape[1]-1)
         nii_2d_image = nii_3d_image[:,slice_portion,:]
     elif(view_mode.get() == "Axial"): # im the z axis "Axial"
-        if slice_portion >= 191: slice_portion = 190
+        max_slice = nii_3d_image.shape[2]
+        if slice_portion >= nii_3d_image.shape[2]: slice_portion = (nii_3d_image.shape[2]-1)
         nii_2d_image = nii_3d_image[:,:,slice_portion]
     elif(view_mode.get() == "Sagittal"): # im the x axis "Sagital"
-        if slice_portion >= 168: slice_portion = 167
+        max_slice = nii_3d_image.shape[0]
+        if slice_portion >= nii_3d_image.shape[0]: slice_portion = (nii_3d_image.shape[0]-1)
         nii_2d_image = nii_3d_image[slice_portion,:,:]
-        
+    
     # to find the range of the threshold slider
     max_value = nii_2d_image.max()
     
@@ -120,19 +141,13 @@ def plot_image():
     refresh_image()
     
     #tk.Label(frangi_frame).pack(pady=0)
-    scale_range.pack()
-    scale_range_slider.pack()
-    alpha_label.pack()
-    alpha_slider.pack()
-    vessel_length_label.pack()
-    beta_slider.pack()
-    c_label.pack()
-    c_slider.pack()
+    frangi_frame.grid(row=3, padx=0)
     apply_frangi_button.grid(row=5,pady=5)
     view_3D_button.grid(row=6,pady=5)
     save_file_button.grid(row=7,pady=5)
-    slice_slider.configure(state="normal")
+    slice_slider.configure(state="normal", to=max_slice)
     view_dropdown.configure(state="normal")
+    canva_tools_frame.pack(pady=10, padx=10, fill="x", expand=True)
 
 
 def add_image():
@@ -150,6 +165,8 @@ def add_image():
             nii_3d_image = nii_file[:,:,:]
             nii_3d_image_original = nii_3d_image
             
+            print("image dimension: ", nii_3d_image.shape)
+            
             # runs function to update background
             plot_image()
             restore_original()
@@ -166,7 +183,7 @@ def apply_gaussian_3d():
 
 def apply_frangi():
     global nii_3d_image
-    nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,(int(hVar1.get()), int(hVar2.get())), alpha_val, beta_val, c_val)
+    nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,(hVar1.get(),hVar2.get()), alpha_val, beta_val, step_val, 1)
     plot_image()
 
 def save_file():
@@ -197,6 +214,17 @@ def change_alpha(val):
     alpha_val = float(val)
     text_val = "Alpha: {:.2f}".format(alpha_val)
     alpha_label.configure(text=text_val)
+
+def update_scale_range_label(*args):
+    # Retrieve the values stored in the DoubleVar objects
+    value1 = hVar1.get()
+    value2 = hVar2.get()
+    
+    # Format the values into the label text
+    text_val = "Scales: \n{:.2f} to {:.2f}".format(value1, value2)
+    
+    # Update the label text
+    scale_range.configure(text=text_val)
  
 def change_beta(val):
     global beta_val
@@ -204,14 +232,14 @@ def change_beta(val):
     text_val = "Beta: {:.2f}".format(beta_val)
     vessel_length_label.configure(text=text_val)
     
-def change_c(val):
-    global c_val
-    c_val = float(val)
-    text_val = "C: {:.2f}".format(c_val)
-    c_label.configure(text=text_val)
+def change_scale_step(val):
+    global step_val
+    step_val = float(val)
+    text_val = "Scale Step: {:}".format(step_val)
+    step_value_label.configure(text=text_val)
  
 def restore_original():
-    global gaussian_intensity, hVar1, hVar2, beta_val, c_val, nii_3d_image, nii_3d_image_original, threshold_value
+    global gaussian_intensity, hVar1, hVar2, beta_val, step_val, nii_3d_image, nii_3d_image_original, threshold_value
     picture_canvas.create_image(0, 0, image=picture_canvas.image, anchor="nw")
     gaussian_intensity = 0
     threshold_value = 0
@@ -376,20 +404,19 @@ left_frame_canvas.pack(side='left', fill='both', expand=True)
 
 # diferent Canvas overlaped on the rest of the window
 # the main canvas frame
-right_frame = ctk.CTkFrame(root, width=750, height=600)
+right_frame = ctk.CTkFrame(root, width=750, height=470)
 right_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
 # the main canvas frame
-canvas_frame = ctk.CTkFrame(right_frame, width=750, height=600)
-canvas_frame.pack(pady=10, padx=10)
+canvas_frame = ctk.CTkFrame(right_frame, width=750, height=470)
+canvas_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
 # the picture canvas where we show the image (under the drawing canvas)
-picture_canvas = ctk.CTkCanvas(canvas_frame, width=750, height=600)
-picture_canvas.pack()
+picture_canvas = ctk.CTkCanvas(canvas_frame, width=750, height=470)
+picture_canvas.pack(fill="both", expand=True)
 
 # frame that contains the canvas tools
 canva_tools_frame = ctk.CTkFrame(right_frame)
-canva_tools_frame.pack(pady=10, padx=10, fill="x", expand=True)
 
 canva_tools_frame.rowconfigure(1, weight=1)
 canva_tools_frame.columnconfigure(0, weight=1)
@@ -435,8 +462,10 @@ text_val = "Slice: " + str(slice_portion)
 label_slice = ctk.CTkLabel(master=slice_frame, text=text_val)
 label_slice.pack( padx=10)
 
+max_slice = 200
+
 # slider
-slice_slider = ctk.CTkSlider(master=slice_frame, from_=1, to=190,state="disabled", command=change_slice_portion, width=120)
+slice_slider = ctk.CTkSlider(master=slice_frame, from_=1, to=max_slice,state="disabled", command=change_slice_portion, width=120)
 slice_slider.set(slice_portion)
 slice_slider.pack( padx=10)
 
@@ -455,45 +484,139 @@ title_label = ctk.CTkLabel(logo_frame, text="MRI Frangi's \n Segmentation Tool")
 title_label.grid(row=1, pady=5)
 
 # Upload Button
-upload_button = ctk.CTkButton(left_frame_canvas, text='Upload Image', command=add_image)
+upload_button = ctk.CTkButton(left_frame_canvas, text='Upload NIfTI File', command=add_image)
 upload_button.grid(row=2,pady=10, padx=20)
 
 tk.Label(left_frame_canvas).grid(row=4,pady=2)
 
 # Frangi options frame
 frangi_frame = tk.Frame(left_frame_canvas)
-frangi_frame.grid(row=3)
+
+# scales frame
+scales_frame = tk.Frame(frangi_frame)
+scales_frame.grid(row=0, column=1)
 
 #scales range slider
-scale_range = ctk.CTkLabel(frangi_frame, text="Range of scales")
+text_val = "Scales: \n{:.2f} to {:.2f}".format(hVar1.get(), hVar2.get())
+scale_range = ctk.CTkLabel(scales_frame, text=text_val)
+scale_range.pack(pady=(20, 0), anchor='s')
 
+# scale range slider
+scale_range_slider = RangeSliderH(scales_frame, [hVar1, hVar2], Width=130, Height=48, padX=17, min_val=0.001, bgColor=frangi_frame.cget('bg'), max_val=10, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
+scale_range_slider.pack()
 
-scale_range_slider = RangeSliderH(frangi_frame, [hVar1, hVar2], Width=150, Height=55, padX=17, min_val=0.001, bgColor=frangi_frame.cget('bg'), max_val=10, show_value=True,digit_precision='.1f', font_color='white',font_size=10, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
+hVar1.trace_add("write", update_scale_range_label)
+hVar2.trace_add("write", update_scale_range_label)
 
+# scale step frame
+c_frame = tk.Frame(frangi_frame)
+c_frame.grid(row=1, column=1)
+
+# scale step label
+text_val = "Scale Step: {:}".format(step_val)
+step_value_label = ctk.CTkLabel(c_frame, text=text_val)
+step_value_label.pack()
+
+# scale step slider
+scale_steps_slider = ctk.CTkSlider(master=c_frame, from_=1, to=10,number_of_steps=9, command=change_scale_step, width=100)
+scale_steps_slider.set(1)
+scale_steps_slider.pack()
+
+# alpha frame
+alpha_frame = tk.Frame(frangi_frame)
+alpha_frame.grid(row=2, column=1)
+
+# alpha label
+text_val = "Alpha: {:.2f}".format(alpha_val)
+alpha_label = ctk.CTkLabel(alpha_frame, text=text_val)
+alpha_label.pack()
 
 # alpha slider
-text_val = "Alpha: {:.2f}".format(alpha_val)
-alpha_label = ctk.CTkLabel(frangi_frame, text=text_val)
-
-
-alpha_slider = ctk.CTkSlider(master=frangi_frame, from_=0.001, to=1,number_of_steps=300, command=change_alpha, width=120)
+alpha_slider = ctk.CTkSlider(master=alpha_frame, from_=0.001, to=1,number_of_steps=300, command=change_alpha, width=100)
 alpha_slider.set(1)
+alpha_slider.pack()
+
+# beta frame
+beta_frame = tk.Frame(frangi_frame)
+beta_frame.grid(row=3, column=1)
 
 # beta slider
 text_val = "Beta: {:.2f}".format(beta_val)
-vessel_length_label = ctk.CTkLabel(frangi_frame, text=text_val)
+vessel_length_label = ctk.CTkLabel(beta_frame, text=text_val)
+vessel_length_label.pack()
 
-
-beta_slider = ctk.CTkSlider(master=frangi_frame, from_=0.001, to=2,number_of_steps=300, command=change_beta, width=120)
+beta_slider = ctk.CTkSlider(master=beta_frame, from_=0.001, to=2,number_of_steps=300, command=change_beta, width=100)
 beta_slider.set(0.35)
+beta_slider.pack()
 
-# c slider
-text_val = "C: {:.2f}".format(c_val)
-c_label = ctk.CTkLabel(frangi_frame, text=text_val)
+#icons for sliders
+
+rangeicon_left_path = "img/scale1.png"
+rangeicon_right_path = "img/scale2.png"
+rangeicon_left_image = Image.open(rangeicon_left_path)
+rangeicon_right_image = Image.open(rangeicon_right_path)
+rangeicon_left_image.thumbnail((15, 15))  
+rangeicon_right_image.thumbnail((30, 30))  
+rangeicon_left = ImageTk.PhotoImage(rangeicon_left_image)
+rangeicon_right = ImageTk.PhotoImage(rangeicon_right_image)
+
+alphaicon_left_path = "img/alpha1.png"
+alphaicon_right_path = "img/alpha2.png"
+alphaicon_left_image = Image.open(alphaicon_left_path)
+alphaicon_right_image = Image.open(alphaicon_right_path)
+alphaicon_left_image.thumbnail((30, 30))  
+alphaicon_right_image.thumbnail((30, 30))  
+alphaicon_left = ImageTk.PhotoImage(alphaicon_left_image)
+alphaicon_right = ImageTk.PhotoImage(alphaicon_right_image)
+
+betaicon_left_path = "img/beta2.png"
+betaicon_right_path = "img/beta1.png"
+betaicon_left_image = Image.open(betaicon_left_path)
+betaicon_right_image = Image.open(betaicon_right_path)
+betaicon_left_image.thumbnail((30, 30))  
+betaicon_right_image.thumbnail((30, 30))  
+betaicon_left = ImageTk.PhotoImage(betaicon_left_image)
+betaicon_right = ImageTk.PhotoImage(betaicon_right_image)
+
+c_icon_left_path = "img/c1.png"
+c_icon_right_path = "img/c2.png"
+c_icon_left_image = Image.open(c_icon_left_path)
+c_icon_right_image = Image.open(c_icon_right_path)
+c_icon_left_image.thumbnail((30, 30))  
+c_icon_right_image.thumbnail((40, 40))  
+c_icon_left = ImageTk.PhotoImage(c_icon_left_image)
+c_icon_right = ImageTk.PhotoImage(c_icon_right_image)
+
+# Create labels for icons
+rangeicon_label_left = tk.Label(frangi_frame, image=rangeicon_left)
+rangeicon_label_left.grid(row=0, column=0, padx=10, sticky='s')  
+
+rangeicon_label_right = tk.Label(frangi_frame, image=rangeicon_right)
+rangeicon_label_right.grid(row=0, column=2, padx=10, sticky='s')  
+
+c_icon_label_left = tk.Label(frangi_frame, image=c_icon_left)
+c_icon_label_left.grid(row=1, column=0, padx=10, sticky='s')  
+
+c_icon_label_right = tk.Label(frangi_frame, image=c_icon_right)
+c_icon_label_right.grid(row=1, column=2, padx=10, sticky='s')  
+
+alphaicon_label_left = tk.Label(frangi_frame, image=alphaicon_left)
+alphaicon_label_left.grid(row=2, column=0, padx=10, sticky='s')  
+
+alphaicon_label_right = tk.Label(frangi_frame, image=alphaicon_right)
+alphaicon_label_right.grid(row=2, column=2, padx=10, sticky='s')  
+
+betaicon_label_left = tk.Label(frangi_frame, image=betaicon_left)
+betaicon_label_left.grid(row=3, column=0, padx=10, sticky='s')  
+
+betaicon_label_right = tk.Label(frangi_frame, image=betaicon_right)
+betaicon_label_right.grid(row=3, column=2, padx=10, sticky='s')  
 
 
-c_slider = ctk.CTkSlider(master=frangi_frame, from_=0.001, to=1,number_of_steps=300, command=change_c, width=120)
-c_slider.set(1)
+
+
+
+
 
 
 # apply frangi button(left_frame_canvas).grid(row=4,pady=2)

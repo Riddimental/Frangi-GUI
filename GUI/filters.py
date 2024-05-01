@@ -9,7 +9,10 @@ import shutil
 import numpy as np
 import scipy.ndimage as ndi
 from skimage import filters
-from scipy.linalg import eigvals
+from scipy.linalg import eigvals, norm
+from itertools import combinations_with_replacement
+
+
 
 def delete_temp():
    # Delete the contents of the temp folder
@@ -30,6 +33,14 @@ def delete_temp():
    else:
       print(f"The folder {folder_path} does not exist.")
 
+def divide_nonzero(array1, array2):
+    """
+    Divides two arrays. Returns zero when dividing by zero.
+    """
+    denominator = np.copy(array2)
+    denominator[denominator == 0] = 1e-10
+    return np.divide(array1, denominator)
+
 def thresholding(data, threshold):
    transformed_image = data > threshold
    #print(transformed_image)
@@ -38,7 +49,6 @@ def thresholding(data, threshold):
 def thresholding2d(data, threshold):
    transformed_image = data > threshold
    plt.imsave("temp/plot.jpeg", transformed_image, cmap = 'gray')
-
 
 def gaussian_preview(data, intensity):
    data = ndi.gaussian_filter(data, intensity)
@@ -52,73 +62,82 @@ def gaussian3d(data3D, intensity):
    data = ndi.gaussian_filter(data3D, intensity/3)
    return data
 
-def sci_frangi(image3D):
-   processed = filters.frangi(image3D)
+def sci_frangi(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cval=1):
+   processed = filters.frangi(image, sigmas=np.arange(scale_range[0], scale_range[1], steps), alpha=alpha, beta=beta, cval=cval)
    return processed
 
-def hessian_eigen(image, sigma):
-   # Gaussian smoothing
-   smoothed_image = ndi.gaussian_filter(image, sigma)
+def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cval=1, black_vessels=True):
+   # Ensure input image is of type float64
+   image = image.astype(np.float64)
+   
+   if not black_vessels:
+        image = -image
+
+   division = (scale_range[1] - scale_range[0]) / steps
+   vesselness = np.zeros_like(image)
+   print('Scales from', scale_range[0], 'to', scale_range[1], 'in', steps, 'steps.')
+
+   scale = scale_range[0]
+   while scale <= scale_range[1]:
+      print('Current scale is:', scale)
+      eigenvalues, cvar = compute_hessian_return_eigvals(image, sigma=scale)
+      vesselness += compute_vesselness(eigenvalues, alpha, beta, cvar)
+      scale += division
+   
+   
+   print("Frangi filter applied.")
+   return vesselness
+
+def compute_hessian_return_eigvals(image, sigma=1):
+   """Compute the Hessian via convolutions with Gaussian derivatives."""
+   float_dtype = np.float64
+   image = image.astype(float_dtype, copy=False)
+
+   if np.isscalar(sigma):
+      sigma = (sigma,) * 3  # For 3D images
+
+   # Gaussian smoothing using ndi.gaussian_filter
+   smoothed_image = ndi.gaussian_filter(image, sigma=sigma, mode='reflect')
 
    # Gradients
    gradients = np.gradient(smoothed_image)
 
-   # Second derivatives
-   Dxx = np.gradient(gradients[0], axis=0)
-   Dyy = np.gradient(gradients[1], axis=1)
-   Dzz = np.gradient(gradients[2], axis=2)
-
-   Dxy = np.gradient(gradients[0], axis=1)
-   Dxz = np.gradient(gradients[0], axis=2)
-   Dyz = np.gradient(gradients[1], axis=2)
-
-   # Construct the Hessian matrix for each voxel
-   H = np.zeros((image.shape[0], image.shape[1], image.shape[2], 3, 3))
-   H[..., 0, 0] = Dxx
-   H[..., 1, 1] = Dyy
-   H[..., 2, 2] = Dzz
-   H[..., 0, 1] = H[..., 1, 0] = Dxy
-   H[..., 0, 2] = H[..., 2, 0] = Dxz
-   H[..., 1, 2] = H[..., 2, 1] = Dyz
-
-   # Compute eigenvalues of the Hessian matrix
-   eigenvalues = np.linalg.eigvalsh(H)
-   
-
-   return eigenvalues
-
-def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, c=1):
-   # Ensure input image is of type float64
-   #image = image.astype(np.float64)
-   
-   division = (scale_range[1] - scale_range[0])/steps
-
-   # Initialize output vesselness image as floating-point
-   vesselness = np.zeros_like(image)
-   
-   print('scales from ', scale_range[0] , ' to ', scale_range[1], ' in ', steps, ' steps.')
-
-   scale = scale_range[0]
-   while scale <= scale_range[1]:
-      # Compute Hessian matrix components
-      # Your code to compute Hessian matrix components goes here
-      print('current scale is: ', scale)
+   # Structure tensors (Hessian)
+   Hessian_matrix = []
+   for i in range(3):  # 3D image, so we iterate over each dimension
+      D1 = np.gradient(gradients[i], axis=i)
+      D2 = np.gradient(D1, axis=i)
+      Hessian_matrix.append(D2)
       
-      eigenvalues = hessian_eigen(image, scale)
-      lambda1 = eigenvalues[..., 0]
-      lambda2 = eigenvalues[..., 1]
-      lambda3 = eigenvalues[..., 2]
+   # Compute the norm of the structure tensors for cval
+   cval = norm(Hessian_matrix) / 2
+   
+   # Compute eigenvalues
+   eig_vals = compute_eig_vals(Hessian_matrix)
 
-      epsilon = 1e-6
-      # Compute vesselness measure for the current scale in 3D
-      Ra = np.abs(lambda2) / np.abs(lambda3 + epsilon)
-      Rb = np.abs(lambda1) / (np.sqrt(np.abs(lambda2 * lambda3)) + epsilon)
-      S2 = np.sqrt(lambda2**2 + lambda3**2)
-      
-      vesselness = (1 - np.exp(-1*(Ra**2 / (2 * alpha**2)))) * np.exp(-1*(Rb**2 / (2 * beta**2))) * (1 - np.exp(-1*(S2**2 / (2 * c**2))))
+   return eig_vals, cval
 
-      # Increment scale by the step size
-      scale += division
-      
-   print("frangi aplied")
+def compute_eig_vals(H_elems):
+   """Compute eigenvalues from the upper-diagonal entries of a symmetric matrix."""
+   M00, M01, M11 = H_elems
+   eigs = np.empty((3, *M00.shape), M00.dtype)
+   eigs[0] = (M00 + M11) / 2
+   hsqrtdet = np.sqrt(M01 ** 2 + ((M00 - M11) / 2) ** 2)
+   eigs[1] = (M00 + M11) / 2 + hsqrtdet
+   eigs[2] = (M00 + M11) / 2 - hsqrtdet
+   return eigs
+
+def compute_vesselness(eigvals, alpha, beta, c):
+   """Compute vesselness measure from Hessian elements."""
+   # Extract Hessian elements
+   eigvals = np.take_along_axis(eigvals, abs(eigvals).argsort(0), 0)
+   lambda1= eigvals[0]
+   lambda2, lambda3 = np.maximum(eigvals[1:], 1e-10)
+
+   # Compute vesselness measure
+   Ra = divide_nonzero(np.abs(lambda2), np.abs(lambda3))
+   Rb = divide_nonzero(np.abs(lambda1), np.sqrt(np.abs(np.multiply(lambda2, lambda3))))
+   S2 = np.sqrt(np.square(lambda1) + np.square(lambda2) + np.square(lambda3))
+
+   vesselness = (1 - np.exp(-Ra**2 / (2 * alpha**2))) * np.exp(-Rb**2 / (2 * beta**2)) * (1 - np.exp(-S2**2 / (2 * c**2)))
    return vesselness

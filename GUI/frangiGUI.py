@@ -44,7 +44,7 @@ if not os.path.exists(temp_directory):
 max_value = 0
 alpha_val = 1
 beta_val=0.35
-step_val = 1
+step_val = 3
 gaussian_intensity = 0
 file_path = ""
 threshold_value = 0
@@ -234,7 +234,7 @@ def change_beta(val):
     
 def change_scale_step(val):
     global step_val
-    step_val = float(val)
+    step_val = int(val)
     text_val = "Scale Step: {:}".format(step_val)
     step_value_label.configure(text=text_val)
  
@@ -277,7 +277,7 @@ def filters_window():
     
     def apply_sci_frangi():
         global nii_3d_image
-        nii_3d_image = filters.sci_frangi(nii_3d_image)
+        nii_3d_image = filters.sci_frangi(nii_3d_image_original,(hVar1.get(),hVar2.get()), alpha_val, beta_val, step_val, 1)
         plot_image()
     
     def cancel_filter():
@@ -519,7 +519,7 @@ step_value_label.pack()
 
 # scale step slider
 scale_steps_slider = ctk.CTkSlider(master=c_frame, from_=1, to=10,number_of_steps=9, command=change_scale_step, width=100)
-scale_steps_slider.set(1)
+scale_steps_slider.set(3)
 scale_steps_slider.pack()
 
 # alpha frame
@@ -545,7 +545,7 @@ text_val = "Beta: {:.2f}".format(beta_val)
 vessel_length_label = ctk.CTkLabel(beta_frame, text=text_val)
 vessel_length_label.pack()
 
-beta_slider = ctk.CTkSlider(master=beta_frame, from_=0.001, to=2,number_of_steps=300, command=change_beta, width=100)
+beta_slider = ctk.CTkSlider(master=beta_frame, from_=0.001, to=1,number_of_steps=300, command=change_beta, width=100)
 beta_slider.set(0.35)
 beta_slider.pack()
 

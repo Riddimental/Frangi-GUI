@@ -109,9 +109,10 @@ def compute_hessian_return_eigvals(image, sigma=1):
       D2 = np.gradient(D1, axis=i)
       Hessian_matrix.append(D2)
       
+   print('hessian ',np.shape(Hessian_matrix))
    # Compute the norm of the structure tensors for cval
    cval = norm(Hessian_matrix) / 2
-   
+   print('cval ',cval)
    # Compute eigenvalues
    eig_vals = compute_eig_vals(Hessian_matrix)
 
@@ -125,6 +126,7 @@ def compute_eig_vals(H_elems):
    hsqrtdet = np.sqrt(M01 ** 2 + ((M00 - M11) / 2) ** 2)
    eigs[1] = (M00 + M11) / 2 + hsqrtdet
    eigs[2] = (M00 + M11) / 2 - hsqrtdet
+   print("eigs ",eigs.shape)
    return eigs
 
 def compute_vesselness(eigvals, alpha, beta, c):

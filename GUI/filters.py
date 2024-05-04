@@ -6,13 +6,12 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import os
 import shutil
+from itertools import product
 import numpy as np
 import scipy.ndimage as ndi
 from skimage import filters
 from scipy.linalg import eigvals, norm
 from itertools import combinations_with_replacement
-
-
 
 def delete_temp():
    # Delete the contents of the temp folder
@@ -80,45 +79,83 @@ def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cva
    scale = scale_range[0]
    while scale <= scale_range[1]:
       print('Current scale is:', scale)
-      eigenvalues, cvar = compute_hessian_return_eigvals(image, sigma=scale)
-      vesselness += compute_vesselness(eigenvalues, alpha, beta, cvar)
+      eigenvalues, cvals = compute_hessian_return_eigvals(image, sigma=scale)
+      print("shapes eigs and cvals are ", eigenvalues.shape,"and", cvals.shape)
+      vesselness += compute_vesselness(eigenvalues, alpha, beta, cvals)
       scale += division
    
    
    print("Frangi filter applied.")
    return vesselness
 
-def compute_hessian_return_eigvals(image, sigma=1):
+def compute_eig_vals(hessian):
+   # Compute eigenvalues
+   eigvals = np.linalg.eigvals(hessian.transpose(2, 3, 4, 0, 1))  # Move the 3x3 matrices to the last dimensions
+
+   # Sort eigenvalues in descending order
+   sorted_eigvals = -np.sort(-eigvals, axis=-1)
+
+   return sorted_eigvals
+
+def compute_cvals(hessian):
+   # Compute the norm of the structure tensors for cval
+   norm = np.linalg.norm(hessian, axis=(0, 1)) / 2
+   return norm
+
+def generate_points(image_3d_array):
+   indices = product(*[range(int(dim)) for dim in image_3d_array.shape])
+   points = np.array(list(indices))
+   return points
+
+
+def compute_hessian_return_eigvals(_3d_image_array, sigma=1):
    """Compute the Hessian via convolutions with Gaussian derivatives."""
    float_dtype = np.float64
-   image = image.astype(float_dtype, copy=False)
+   _3d_image_array = _3d_image_array.astype(float_dtype, copy=False)
 
    if np.isscalar(sigma):
       sigma = (sigma,) * 3  # For 3D images
 
    # Gaussian smoothing using ndi.gaussian_filter
-   smoothed_image = ndi.gaussian_filter(image, sigma=sigma, mode='reflect')
-
+   smoothed_image = ndi.gaussian_filter(_3d_image_array, sigma=sigma, mode='reflect')
+   print("smoothed image shape is ",smoothed_image.shape)
+   
    # Gradients
    gradients = np.gradient(smoothed_image)
+   gradients = np.array(gradients)
 
-   # Structure tensors (Hessian)
-   Hessian_matrix = []
-   for i in range(3):  # 3D image, so we iterate over each dimension
-      D1 = np.gradient(gradients[i], axis=i)
-      D2 = np.gradient(D1, axis=i)
-      Hessian_matrix.append(D2)
+   print("gradients shape ", np.shape(gradients))  # gradients shape  (3, 176, 192, 192)
+
+   hessian = np.zeros((3,3,_3d_image_array.shape[0],_3d_image_array.shape[1],_3d_image_array.shape[2]))
+   
+   for var1 in range(3):
+      for var2 in range(var1, 3):  # Only compute upper triangle (including diagonal)
+         # Calculate gradients
+         D1 = np.gradient(smoothed_image, axis=var1)
+         D2 = np.gradient(D1, axis=var2)
+         #print('D2 shape ',D2.shape)
+         hessian[var1,var2] = hessian[var2,var1] = D2
+         
+   print("hessian shape ", hessian.shape)
+
+   # Compute the norm of the structure tensors for cval and Compute eigenvalues
+   cvals = np.zeros_like(_3d_image_array)
+   eig_vals = np.zeros((_3d_image_array.shape[0], _3d_image_array.shape[1], _3d_image_array.shape[2], 3))
+   
+   points = generate_points(_3d_image_array) # array shape is (176, 192, 192) help me optimize this
       
-   print('hessian ',np.shape(Hessian_matrix))
-   # Compute the norm of the structure tensors for cval
-   cval = norm(Hessian_matrix) / 2
-   print('cval ',cval)
-   # Compute eigenvalues
-   eig_vals = compute_eig_vals(Hessian_matrix)
+   cvals = compute_cvals(hessian)
+   print("cvals shape: ", cvals.shape)
 
-   return eig_vals, cval
+   eig_vals = compute_eig_vals(hessian)
 
-def compute_eig_vals(H_elems):
+   print('cvals shape', cvals.shape)
+
+   print('eig vals shape', eig_vals.shape, eig_vals[100,100,100])
+   
+   return eig_vals, cvals
+
+def compute_eig_valsold(H_elems):
    """Compute eigenvalues from the upper-diagonal entries of a symmetric matrix."""
    M00, M01, M11 = H_elems
    eigs = np.empty((3, *M00.shape), M00.dtype)
@@ -126,20 +163,26 @@ def compute_eig_vals(H_elems):
    hsqrtdet = np.sqrt(M01 ** 2 + ((M00 - M11) / 2) ** 2)
    eigs[1] = (M00 + M11) / 2 + hsqrtdet
    eigs[2] = (M00 + M11) / 2 - hsqrtdet
-   print("eigs ",eigs.shape)
+   #print("eigs ",eigs.shape)
    return eigs
 
-def compute_vesselness(eigvals, alpha, beta, c):
+def compute_vesselness(eigvals, alpha, beta, cvals):
    """Compute vesselness measure from Hessian elements."""
    # Extract Hessian elements
-   eigvals = np.take_along_axis(eigvals, abs(eigvals).argsort(0), 0)
-   lambda1= eigvals[0]
-   lambda2, lambda3 = np.maximum(eigvals[1:], 1e-10)
+   lambdas1 = eigvals[:,:,:,0]
+   lambdas2 = eigvals[:,:,:,1]
+   lambdas3 = eigvals[:,:,:,2]
+   print("lambdas shapes ", lambdas1.shape)
+   shape = lambdas1.shape
 
    # Compute vesselness measure
-   Ra = divide_nonzero(np.abs(lambda2), np.abs(lambda3))
-   Rb = divide_nonzero(np.abs(lambda1), np.sqrt(np.abs(np.multiply(lambda2, lambda3))))
-   S2 = np.sqrt(np.square(lambda1) + np.square(lambda2) + np.square(lambda3))
+   Ra = divide_nonzero(np.abs(lambdas2), np.abs(lambdas3))
+   print("Ra shapes ", Ra.shape)
+   Rb = divide_nonzero(np.abs(lambdas1), np.sqrt(np.abs(np.multiply(lambdas2, lambdas3))))
+   print("Rb shapes ", Rb.shape)
+   S2 = np.sqrt(np.square(lambdas1) + np.square(lambdas2) + np.square(lambdas3))
+   print("S2 shapes ", S2.shape)
 
-   vesselness = (1 - np.exp(-Ra**2 / (2 * alpha**2))) * np.exp(-Rb**2 / (2 * beta**2)) * (1 - np.exp(-S2**2 / (2 * c**2)))
+   vesselness = (1 - np.exp(-Ra**2 / (2 * alpha**2))) * np.exp(-Rb**2 / (2 * beta**2)) * (1 - np.exp(-S2**2 / (2 * cvals**2 + 1e-6)))
+   print("vesselness shapes ", vesselness.shape)
    return vesselness

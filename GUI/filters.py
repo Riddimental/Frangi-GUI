@@ -102,12 +102,6 @@ def compute_cvals(hessian):
    norm = np.linalg.norm(hessian, axis=(0, 1)) / 2
    return norm
 
-def generate_points(image_3d_array):
-   indices = product(*[range(int(dim)) for dim in image_3d_array.shape])
-   points = np.array(list(indices))
-   return points
-
-
 def compute_hessian_return_eigvals(_3d_image_array, sigma=1):
    """Compute the Hessian via convolutions with Gaussian derivatives."""
    float_dtype = np.float64
@@ -142,8 +136,6 @@ def compute_hessian_return_eigvals(_3d_image_array, sigma=1):
    cvals = np.zeros_like(_3d_image_array)
    eig_vals = np.zeros((_3d_image_array.shape[0], _3d_image_array.shape[1], _3d_image_array.shape[2], 3))
    
-   points = generate_points(_3d_image_array) # array shape is (176, 192, 192) help me optimize this
-      
    cvals = compute_cvals(hessian)
    print("cvals shape: ", cvals.shape)
 
@@ -154,17 +146,6 @@ def compute_hessian_return_eigvals(_3d_image_array, sigma=1):
    print('eig vals shape', eig_vals.shape, eig_vals[100,100,100])
    
    return eig_vals, cvals
-
-def compute_eig_valsold(H_elems):
-   """Compute eigenvalues from the upper-diagonal entries of a symmetric matrix."""
-   M00, M01, M11 = H_elems
-   eigs = np.empty((3, *M00.shape), M00.dtype)
-   eigs[0] = (M00 + M11) / 2
-   hsqrtdet = np.sqrt(M01 ** 2 + ((M00 - M11) / 2) ** 2)
-   eigs[1] = (M00 + M11) / 2 + hsqrtdet
-   eigs[2] = (M00 + M11) / 2 - hsqrtdet
-   #print("eigs ",eigs.shape)
-   return eigs
 
 def compute_vesselness(eigvals, alpha, beta, cvals):
    """Compute vesselness measure from Hessian elements."""

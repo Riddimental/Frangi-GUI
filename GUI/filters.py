@@ -65,11 +65,11 @@ def sci_frangi(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cval=1):
    processed = filters.frangi(image, sigmas=np.arange(scale_range[0], scale_range[1], steps), alpha=alpha, beta=beta, cval=cval)
    return processed
 
-def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cval=1, black_vessels=True):
+def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, black_vessels=True):
    # Ensure input image is of type float64
    image = image.astype(np.float64)
    
-   if not black_vessels:
+   if black_vessels:
         image = -image
 
    division = (scale_range[1] - scale_range[0]) / steps
@@ -81,7 +81,7 @@ def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cva
       print('Current scale is:', scale)
       eigenvalues, cvals = compute_hessian_return_eigvals(image, sigma=scale)
       print("shapes eigs and cvals are ", eigenvalues.shape,"and", cvals.shape)
-      vesselness += compute_vesselness(eigenvalues, alpha, beta, cvals)
+      vesselness += compute_vesselness(eigenvalues, alpha, beta, cvals).astype(np.float64)
       scale += division
    
    

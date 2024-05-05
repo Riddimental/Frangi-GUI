@@ -16,7 +16,7 @@ root = ctk.CTk()
 
 # Window dimensions and centering
 window_width = 800
-window_height = 630
+window_height = 670
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
 ctk.set_appearance_mode="light"
@@ -42,9 +42,12 @@ if not os.path.exists(temp_directory):
 
 # Defining global variables
 max_value = 0
-alpha_val = 1
-beta_val=0.35
-step_val = 3
+alpha_val = 0.05
+beta_val=0.80
+step_val = 1
+black_vessels = tk.IntVar()
+black_vessels.set(1)
+isblack = True
 gaussian_intensity = 0
 file_path = ""
 threshold_value = 0
@@ -142,9 +145,10 @@ def plot_image():
     
     #tk.Label(frangi_frame).pack(pady=0)
     frangi_frame.grid(row=3, padx=0)
-    apply_frangi_button.grid(row=5,pady=5)
-    view_3D_button.grid(row=6,pady=5)
-    save_file_button.grid(row=7,pady=5)
+    file_tools_frame.grid(row=4, column=0, pady=5, padx=20)
+    apply_frangi_button.pack(pady=5)
+    view_3D_button.pack(pady=5)
+    save_file_button.pack(pady=5)
     slice_slider.configure(state="normal", to=max_slice)
     view_dropdown.configure(state="normal")
     canva_tools_frame.pack(pady=10, padx=10, fill="x", expand=True)
@@ -183,7 +187,7 @@ def apply_gaussian_3d():
 
 def apply_frangi():
     global nii_3d_image
-    nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,(hVar1.get(),hVar2.get()), alpha_val, beta_val, step_val, 1)
+    nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,(hVar1.get(),hVar2.get()), alpha_val, beta_val, step_val, isblack)
     plot_image()
 
 def save_file():
@@ -214,6 +218,17 @@ def change_alpha(val):
     alpha_val = float(val)
     text_val = "Alpha: {:.2f}".format(alpha_val)
     alpha_label.configure(text=text_val)
+
+def change_black_vessels():
+    global black_vessels, isblack
+    if black_vessels.get() == 1:
+        black_vessels_switch.configure(text="True")
+        isblack = True
+        print("Black Vessels True")
+    else:
+        black_vessels_switch.configure(text="False")
+        isblack = False
+        print("Black Vessels False")
 
 def update_scale_range_label(*args):
     # Retrieve the values stored in the DoubleVar objects
@@ -519,7 +534,7 @@ step_value_label.pack()
 
 # scale step slider
 scale_steps_slider = ctk.CTkSlider(master=c_frame, from_=1, to=10,number_of_steps=9, command=change_scale_step, width=100)
-scale_steps_slider.set(3)
+scale_steps_slider.set(step_val)
 scale_steps_slider.pack()
 
 # alpha frame
@@ -533,7 +548,7 @@ alpha_label.pack()
 
 # alpha slider
 alpha_slider = ctk.CTkSlider(master=alpha_frame, from_=0.001, to=1,number_of_steps=300, command=change_alpha, width=100)
-alpha_slider.set(1)
+alpha_slider.set(0.1)
 alpha_slider.pack()
 
 # beta frame
@@ -546,8 +561,16 @@ vessel_length_label = ctk.CTkLabel(beta_frame, text=text_val)
 vessel_length_label.pack()
 
 beta_slider = ctk.CTkSlider(master=beta_frame, from_=0.001, to=1,number_of_steps=300, command=change_beta, width=100)
-beta_slider.set(0.35)
+beta_slider.set(0.80)
 beta_slider.pack()
+
+# label for the pen mode
+switch_label = ctk.CTkLabel(frangi_frame, text="Black Vessels:")
+switch_label.grid(row=4, column=1, pady=5)
+
+# switch to mark background and foreground
+black_vessels_switch = ctk.CTkSwitch(frangi_frame,text="True", variable=black_vessels, command=change_black_vessels)
+black_vessels_switch.grid(row=5, column=1, pady=1)
 
 #icons for sliders
 
@@ -560,8 +583,8 @@ rangeicon_right_image.thumbnail((30, 30))
 rangeicon_left = ImageTk.PhotoImage(rangeicon_left_image)
 rangeicon_right = ImageTk.PhotoImage(rangeicon_right_image)
 
-alphaicon_left_path = "img/alpha1.png"
-alphaicon_right_path = "img/alpha2.png"
+alphaicon_right_path = "img/alpha1.png"
+alphaicon_left_path = "img/alpha2.png"
 alphaicon_left_image = Image.open(alphaicon_left_path)
 alphaicon_right_image = Image.open(alphaicon_right_path)
 alphaicon_left_image.thumbnail((30, 30))  
@@ -569,8 +592,8 @@ alphaicon_right_image.thumbnail((30, 30))
 alphaicon_left = ImageTk.PhotoImage(alphaicon_left_image)
 alphaicon_right = ImageTk.PhotoImage(alphaicon_right_image)
 
-betaicon_left_path = "img/beta2.png"
-betaicon_right_path = "img/beta1.png"
+betaicon_right_path = "img/beta2.png"
+betaicon_left_path = "img/beta1.png"
 betaicon_left_image = Image.open(betaicon_left_path)
 betaicon_right_image = Image.open(betaicon_right_path)
 betaicon_left_image.thumbnail((30, 30))  
@@ -619,14 +642,17 @@ betaicon_label_right.grid(row=3, column=2, padx=10, sticky='s')
 
 
 
+
+# file tools frame
+file_tools_frame = tk.Frame(left_frame_canvas)
+
 # apply frangi button(left_frame_canvas).grid(row=4,pady=2)
-apply_frangi_button = ctk.CTkButton(left_frame_canvas,text="Apply Frangi",command=apply_frangi)
+apply_frangi_button = ctk.CTkButton(file_tools_frame,text="Apply Frangi",command=apply_frangi)
 
 # 3D view button
-view_3D_button = ctk.CTkButton(left_frame_canvas,text="3D View",command=open_napari)
+view_3D_button = ctk.CTkButton(file_tools_frame,text="3D View",command=open_napari)
 
-# save file button
-save_file_button = ctk.CTkButton(left_frame_canvas,text="Save NIfTI",command=save_file)
-
+# Process image segmentation button
+save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_file)
 
 root.mainloop()

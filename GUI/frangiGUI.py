@@ -187,7 +187,7 @@ def apply_gaussian_3d():
 
 def apply_frangi():
     global nii_3d_image
-    nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,(hVar1.get(),hVar2.get()), alpha_val, beta_val, step_val, isblack)
+    nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,(hVar1.get()/2,hVar2.get()/2), alpha_val, beta_val, step_val, isblack)
     plot_image()
 
 def save_file():

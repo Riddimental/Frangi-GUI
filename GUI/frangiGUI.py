@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import customtkinter as ctk
 import cv2
 import numpy as np
@@ -15,8 +16,10 @@ import napari
 root = ctk.CTk()
 
 # Window dimensions and centering
-window_width = 800
-window_height = 670
+window_width = 850
+window_height = 700
+last_resize_time = 0
+resize_interval = 1 / 60  # Tiempo mínimo entre ejecuciones en segundos (60 fps)
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
 ctk.set_appearance_mode="light"
@@ -49,6 +52,8 @@ black_vessels = tk.IntVar()
 black_vessels.set(1)
 isblack = True
 gaussian_intensity = 0
+original_canvas_width = 0
+original_canvas_height = 0
 file_path = ""
 threshold_value = 0
 nii_2d_image = []
@@ -57,6 +62,11 @@ nii_3d_image_original = []
 slice_portion = 100
 view_mode = ctk.StringVar(value="Axial")
 selection_image = Image.new("RGB",(200,200),(0,0,0))
+
+file_selected = False
+
+# Make the window not resizable until file is selected
+#root.resizable(False, False)
 
 def close_program():
     filters.delete_temp()
@@ -78,40 +88,106 @@ def open_napari():
     # Show the viewer
     viewer.window.show()
 
-# function to refresh the canva with the lates plot update
+def on_window_resize(event):
+    global original_canvas_width, original_canvas_height, last_resize_time, file_selected
+    
+    current_time = time.time()
+    if (current_time - last_resize_time < resize_interval) or not(file_selected):
+        return
+    
+    last_resize_time = current_time
+    
+    original_canvas_width = canvas_frame.winfo_width()
+    original_canvas_height = canvas_frame.winfo_height()
+    try:
+        refresh_image()
+        # print('me movi a las ', current_time)
+    except Exception as e:
+        pass
+
+
 def refresh_image():
-    global selection_image
-    # givin the function time to avoid over-refreshing
+    global selection_image, scale_factor, original_canvas_height, original_canvas_width
+    # giving the function time to avoid over-refreshing
     plot_image = Image.open("temp/plot.jpeg")
     
     # Get the dimensions of the canvas
-    canvas_width = picture_canvas.winfo_width()
-    canvas_height = picture_canvas.winfo_height()
+    canvas_width = canvas_frame.winfo_width()
+    canvas_height = canvas_frame.winfo_height()
 
-    # Check if the image needs resizing
-    if plot_image.width > canvas_width or plot_image.height > canvas_height:
-        # Calculate the scaling factor to fit the image within the canvas while preserving proportions
-        scale_factor = min(canvas_width / plot_image.width, canvas_height / plot_image.height)
-        new_width = int(plot_image.width * scale_factor)
-        new_height = int(plot_image.height * scale_factor)
+    # Calculate the scaling factor to fit the canvas while preserving proportions
+    scale_factor = min(canvas_width / plot_image.width, canvas_height / plot_image.height)
 
-        # Resize the image
-        plot_image = plot_image.resize((new_width, new_height))
+    # Calculate the new dimensions
+    new_width = int(plot_image.width * scale_factor)
+    new_height = int(plot_image.height * scale_factor)
+    
+    if new_height >= original_canvas_height:
+        new_height = original_canvas_height
+    if new_width >= original_canvas_width:
+        new_width = original_canvas_width
+
+    picture_canvas.config(width=new_width, height=new_height)
+    # Resize the image
+    plot_image = plot_image.resize((new_width, new_height))
+
+    # Printing the picture in the canvas
+    image = ImageTk.PhotoImage(plot_image)
+    picture_canvas.image = image
+
+    # adjusting the canvas to be the same size as the plot
+    picture_canvas.config(width=plot_image.width, height=plot_image.height)
+
+    # Print the image centered within the canvas
+    picture_canvas.create_image(0, 0, image=image, anchor="nw")
+    
+
+# function to refresh the canva with the lates plot update
+def refresh_image():
+    global selection_image, scale_factor, original_canvas_height, original_canvas_width
+    # giving the function time to avoid over-refreshing
+    plot_image = Image.open("temp/plot.jpeg")
+    
+    # Get the dimensions of the canvas
+    canvas_width = canvas_frame.winfo_width()
+    canvas_height = canvas_frame.winfo_height()
+
+    # Calculate the scaling factor to fit the canvas while preserving proportions
+    scale_factor = min(canvas_width / plot_image.width, canvas_height / plot_image.height)
+
+    # Calculate the new dimensions
+    new_width = int(plot_image.width * scale_factor)
+    new_height = int(plot_image.height * scale_factor)
+    
+    if new_height >= original_canvas_height:
+        new_height = original_canvas_height
+    if new_width >= original_canvas_width:
+        new_width = original_canvas_width
+
+    picture_canvas.config(width=new_width, height=new_height)
+    # Resize the image
+    plot_image = plot_image.resize((new_width, new_height))
 
     # Printing the picture in the canvas
     image = ImageTk.PhotoImage(plot_image)
     picture_canvas.image = image
     
-    # Assuming canvas_width and canvas_height are the dimensions of the canvas
-    image_width = plot_image.width
-    image_height = plot_image.height
-
     # Calculate the coordinates to center the image
-    center_x = (canvas_width - image_width) / 2
-    center_y = (canvas_height - image_height) / 2
+    center_x = (canvas_width - new_width) / 2
+    center_y = (canvas_height - new_height) / 2
+
+    # adjusting the canvas to be the same size as the plot
+    picture_canvas.config(width=plot_image.width, height=plot_image.height)
+
+    # If the image exceeds canvas dimensions, adjust centering coordinates
+    if center_x < 0:
+        center_x = 0
+    if center_y < 0:
+        center_y = 0
 
     # Print the image centered within the canvas
-    picture_canvas.create_image(center_x, center_y, image=image, anchor="nw")
+    picture_canvas.create_image(0, 0, image=image, anchor="nw")
+    
 
 # function to plot the readed .nii image
 def plot_image():
@@ -145,18 +221,22 @@ def plot_image():
     
     #tk.Label(frangi_frame).pack(pady=0)
     frangi_frame.grid(row=3, padx=0)
-    file_tools_frame.grid(row=4, column=0, pady=5, padx=20)
+    file_tools_frame.grid(row=4, column=0, pady=10, padx=20)
     apply_frangi_button.pack(pady=5)
     view_3D_button.pack(pady=5)
     save_file_button.pack(pady=5)
     slice_slider.configure(state="normal", to=max_slice)
+    picture_canvas.pack(anchor="center", expand=True)
     view_dropdown.configure(state="normal")
-    canva_tools_frame.pack(pady=10, padx=10, fill="x", expand=True)
-
-
+    filters_button.configure(state="normal")
+    restore_button.configure(state="normal")
+   
 def add_image():
-    global file_path, nii_2d_image, nii_3d_image_original, nii_3d_image
+    global file_path, nii_2d_image, nii_3d_image_original, nii_3d_image, file_selected, original_canvas_width, original_canvas_height
     filters.delete_temp()
+    # Get the dimensions of the canvas
+    original_canvas_width = canvas_frame.winfo_width()
+    original_canvas_height = canvas_frame.winfo_height()
     file_path = filedialog.askopenfilename(filetypes=[("NIfTI files", "*.nii")])
     if file_path:
         try:
@@ -165,15 +245,14 @@ def add_image():
             nii_file.shape
             
             # getting data
-            #nii_data = nii_file[:,:,slice_portion]
             nii_3d_image = nii_file[:,:,:]
             nii_3d_image_original = nii_3d_image
-            
-            print("image dimension: ", nii_3d_image.shape)
             
             # runs function to update background
             plot_image()
             restore_original()
+            file_selected = True
+            root.resizable(True, True)
             
         except Exception as e:
             print("Error loading image:", e)
@@ -236,7 +315,7 @@ def update_scale_range_label(*args):
     value2 = hVar2.get()
     
     # Format the values into the label text
-    text_val = "Scales: \n{:.2f} to {:.2f}".format(value1, value2)
+    text_val = "Target diameter: \n{:.2f} to {:.2f}".format(value1, value2)
     
     # Update the label text
     scale_range.configure(text=text_val)
@@ -422,16 +501,16 @@ left_frame_canvas.pack(side='left', fill='both', expand=True)
 right_frame = ctk.CTkFrame(root, width=750, height=470)
 right_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
-# the main canvas frame
-canvas_frame = ctk.CTkFrame(right_frame, width=750, height=470)
-canvas_frame.pack(pady=10, padx=10, fill="both", expand=True)
-
-# the picture canvas where we show the image (under the drawing canvas)
-picture_canvas = ctk.CTkCanvas(canvas_frame, width=750, height=470)
-picture_canvas.pack(fill="both", expand=True)
-
 # frame that contains the canvas tools
 canva_tools_frame = ctk.CTkFrame(right_frame)
+canva_tools_frame.pack(side="top",pady=10, padx=10, fill="x")
+
+# the main canvas frame
+canvas_frame = ctk.CTkFrame(right_frame)
+canvas_frame.pack(pady=10, padx=10,fill="both", expand=True)
+
+# the picture canvas where we show the image (under the drawing canvas)
+picture_canvas = ctk.CTkCanvas(canvas_frame)
 
 canva_tools_frame.rowconfigure(1, weight=1)
 canva_tools_frame.columnconfigure(0, weight=1)
@@ -443,12 +522,13 @@ tools_button_frame = tk.Frame(canva_tools_frame)
 tools_button_frame.grid(row=0,column=0,pady=5)
 
 # Clear canva button
-restore_button = ctk.CTkButton(tools_button_frame, text="Restore Original", command=restore_original)
+restore_button = ctk.CTkButton(tools_button_frame, state="disabled", text="Restore Original", command=restore_original)
 restore_button.pack(pady=5)
 
 # Filters button
-filters_button = ctk.CTkButton(tools_button_frame, text="More Filters", command=filters_window)
+filters_button = ctk.CTkButton(tools_button_frame, state="disabled", text="More Filters", command=filters_window)
 filters_button.pack(pady=5)
+
 
 view_frame = tk.Frame(canva_tools_frame)
 view_frame.grid(row=0,column=1,pady=10)
@@ -512,12 +592,12 @@ scales_frame = tk.Frame(frangi_frame)
 scales_frame.grid(row=0, column=1)
 
 #scales range slider
-text_val = "Scales: \n{:.2f} to {:.2f}".format(hVar1.get(), hVar2.get())
+text_val = "Target diameter: \n{:.2f} to {:.2f}".format(hVar1.get(), hVar2.get())
 scale_range = ctk.CTkLabel(scales_frame, text=text_val)
 scale_range.pack(pady=(20, 0), anchor='s')
 
 # scale range slider
-scale_range_slider = RangeSliderH(scales_frame, [hVar1, hVar2], Width=130, Height=48, padX=17, min_val=0.001, bgColor=frangi_frame.cget('bg'), max_val=10, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
+scale_range_slider = RangeSliderH(scales_frame, [hVar1, hVar2], Width=130, Height=48, padX=17, min_val=0.001, bgColor=frangi_frame.cget('bg'), max_val=80, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
 scale_range_slider.pack()
 
 hVar1.trace_add("write", update_scale_range_label)
@@ -654,5 +734,7 @@ view_3D_button = ctk.CTkButton(file_tools_frame,text="3D View",command=open_napa
 
 # Process image segmentation button
 save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_file)
+
+root.bind("<Configure>", on_window_resize)
 
 root.mainloop()

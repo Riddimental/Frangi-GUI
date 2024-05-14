@@ -112,7 +112,7 @@ def compute_hessian_return_eigvals(_3d_image_array, sigma=1):
       sigma = (sigma,) * 3  # For 3D images
 
    # Gaussian smoothing using ndi.gaussian_filter
-   smoothed_image = ndi.gaussian_filter(_3d_image_array, sigma=sigma, mode='reflect')
+   smoothed_image = ndi.gaussian_filter(_3d_image_array, sigma=sigma, mode='nearest')
    #print("smoothed image shape is ",smoothed_image.shape)
    
    # Gradients

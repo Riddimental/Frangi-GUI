@@ -32,6 +32,37 @@ def delete_temp():
    else:
       print(f"The folder {folder_path} does not exist.")
 
+def mm2voxel(mm, voxel_size):
+   num_voxels = mm / voxel_size
+   print("for a voxel size of ",voxel_size,", ",mm, "mm's of diameter is ",num_voxels/2," voxels in radius")
+   return num_voxels/2 #returns de raius which is diameter/2
+
+def intensity_rescale(image, new_min=0, new_max=1):
+   """
+   Rescale the intensity values of a 3D image array to a specified range.
+
+   Parameters:
+   - image: 3D numpy array representing the input image.
+   - new_min: Minimum value of the new intensity range (default: 0).
+   - new_max: Maximum value of the new intensity range (default: 1).
+
+   Returns:
+   - rescaled_image: 3D numpy array containing the rescaled image.
+   """
+   # Compute the current minimum and maximum intensity values
+   current_min = np.min(image)
+   current_max = np.max(image)
+
+   # Rescale the intensity values to the new range
+   rescaled_image = (image - current_min) / (current_max - current_min)
+
+   # Scale to the new range
+   rescaled_image = rescaled_image * (new_max - new_min) + new_min
+   
+   print("intensity rescaled")
+
+   return rescaled_image
+
 def divide_nonzero(array1, array2):
     """
     Divides two arrays. Returns zero when dividing by zero.
@@ -69,22 +100,24 @@ def sci_frangi(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cval=1):
 def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, black_vessels=True):
    # Ensure input image is of type float64
    image = image.astype(np.float64)
+   up_limit = np.max(image)
    
    if black_vessels:
         image = -image
+        image = intensity_rescale(image,0,up_limit) # invert the image and keep proportions
 
    division = (scale_range[1] - scale_range[0]) / steps
    vesselness = np.zeros_like(image)
-   print('Scales from', scale_range[0]*2, 'to', scale_range[1]*2, 'in', steps, 'steps.')
+   print('Scales from', scale_range[0], 'to', scale_range[1], 'in', steps, 'steps.')
    
    scale = scale_range[0]
    while scale <= scale_range[1]:
-      print('Current scale:', scale*2)
+      print('Current scale:', scale)
       eigenvalues = compute_hessian_return_eigvals(image, sigma=scale)
       #print("shapes eigs are ", eigenvalues.shape)
-      vesselness += compute_vesselness(eigenvalues, alpha, beta).astype(np.float64)
+      output = compute_vesselness(eigenvalues, alpha, beta).astype(np.float64)
+      vesselness += output
       scale += division
-   
    
    print("Frangi filter applied.")
    return vesselness

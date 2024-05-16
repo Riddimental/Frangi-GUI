@@ -12,6 +12,7 @@ from tkinter import Toplevel, filedialog
 from PIL import Image, ImageTk
 from RangeSlider.RangeSlider import RangeSliderH
 import napari
+import mriqc
 
 root = ctk.CTk()
 
@@ -19,6 +20,7 @@ root = ctk.CTk()
 window_width = 850
 window_height = 700
 last_resize_time = 0
+voxel_size = 1 #mm
 resize_interval = 1 / 60  # Tiempo mínimo entre ejecuciones en segundos (60 fps)
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
@@ -56,7 +58,9 @@ original_canvas_width = 0
 original_canvas_height = 0
 file_path = ""
 threshold_value = 0
+
 nii_2d_image = []
+nii_file = []
 nii_3d_image = np.zeros((200, 200, 200))
 nii_3d_image_original = []
 slice_portion = 100
@@ -106,7 +110,7 @@ def on_window_resize(event):
         pass
 
 
-def refresh_image():
+def refresh_imageold():
     global selection_image, scale_factor, original_canvas_height, original_canvas_width
     # giving the function time to avoid over-refreshing
     plot_image = Image.open("temp/plot.jpeg")
@@ -232,7 +236,7 @@ def plot_image():
     restore_button.configure(state="normal")
    
 def add_image():
-    global file_path, nii_2d_image, nii_3d_image_original, nii_3d_image, file_selected, original_canvas_width, original_canvas_height
+    global file_path, nii_2d_image, nii_3d_image_original, nii_3d_image, file_selected, original_canvas_width, original_canvas_height, nii_file, voxel_size
     filters.delete_temp()
     # Get the dimensions of the canvas
     original_canvas_width = canvas_frame.winfo_width()
@@ -241,18 +245,38 @@ def add_image():
     if file_path:
         try:
             # reading file
-            nii_file = nib.load(file_path).get_fdata()
-            nii_file.shape
-            
+            nii_file = nib.load(file_path)
+
             # getting data
-            nii_3d_image = nii_file[:,:,:]
+            nii_3d_image = nii_file.get_fdata()[:,:,:]
             nii_3d_image_original = nii_3d_image
+            print("image loaded ")
+            
+            # Access the header metadata
+            header = nii_file.header
+            # Print the header metadata
+            # Get the dimensions of the NIfTI image
+            dimensions = header.get_data_shape()
+            print("Dimensions:", dimensions)
+            # Get voxel sizes
+            voxel_sizes = header.get_zooms()
+            voxel_size = np.min(voxel_sizes)
+            print("Voxel Sizes:", voxel_sizes)
+
+            # Get data type
+            data_type = header.get_data_dtype()
+            print("Data Type:", data_type)
+            
+            upper_sigma = filters.mm2voxel(3, voxel_size)
+            hVar2.set(upper_sigma)
             
             # runs function to update background
             plot_image()
             restore_original()
             file_selected = True
             root.resizable(True, True)
+            mriqc.workflow.run(file_path, '/temp', 'participant', noise=True)
+
             
         except Exception as e:
             print("Error loading image:", e)
@@ -597,7 +621,7 @@ scale_range = ctk.CTkLabel(scales_frame, text=text_val)
 scale_range.pack(pady=(20, 0), anchor='s')
 
 # scale range slider
-scale_range_slider = RangeSliderH(scales_frame, [hVar1, hVar2], Width=130, Height=48, padX=17, min_val=0.001, bgColor=frangi_frame.cget('bg'), max_val=80, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
+scale_range_slider = RangeSliderH(scales_frame, [hVar1, hVar2], Width=130, Height=48, padX=17, min_val=0.001, bgColor=frangi_frame.cget('bg'), max_val=120, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
 scale_range_slider.pack()
 
 hVar1.trace_add("write", update_scale_range_label)

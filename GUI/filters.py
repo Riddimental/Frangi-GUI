@@ -34,8 +34,8 @@ def delete_temp():
 
 def mm2voxel(mm, voxel_size):
    num_voxels = mm / voxel_size
-   print("for a voxel size of ",voxel_size,", ",mm, "mm's of diameter is ",num_voxels/2," voxels in radius")
-   return num_voxels/2 #returns de raius which is diameter/2
+   print("for a voxel size of ",voxel_size,", ",mm, "mm's of diameter is ",num_voxels," voxels")
+   return num_voxels #returns the diameter
 
 def intensity_rescale(image, new_min=0, new_max=1):
    """

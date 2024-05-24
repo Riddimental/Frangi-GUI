@@ -12,7 +12,9 @@ from tkinter import Toplevel, filedialog
 from PIL import Image, ImageTk
 from RangeSlider.RangeSlider import RangeSliderH
 import napari
-import mriqc
+import json
+from scipy.ndimage import zoom
+from skimage.transform import resize
 
 root = ctk.CTk()
 
@@ -33,7 +35,7 @@ root.title("Frangi MRI")
 #root.resizable(False, False)
 
 hVar1 = tk.DoubleVar()
-hVar1.set(0.2)# left handle variable
+hVar1.set(0.1)# left handle variable
 hVar2 = tk.DoubleVar()
 hVar2.set(2)# right handle variable
 
@@ -47,8 +49,8 @@ if not os.path.exists(temp_directory):
 
 # Defining global variables
 max_value = 0
-alpha_val = 0.05
-beta_val=0.80
+alpha_val = 0.80
+beta_val=0.1
 step_val = 1
 black_vessels = tk.IntVar()
 black_vessels.set(1)
@@ -61,7 +63,7 @@ threshold_value = 0
 
 nii_2d_image = []
 nii_file = []
-nii_3d_image = np.zeros((200, 200, 200))
+nii_3d_image = []
 nii_3d_image_original = []
 slice_portion = 100
 view_mode = ctk.StringVar(value="Axial")
@@ -234,9 +236,16 @@ def plot_image():
     view_dropdown.configure(state="normal")
     filters_button.configure(state="normal")
     restore_button.configure(state="normal")
-   
+
+def resample_image(image_data, target_voxel_size):
+    current_voxel_sizes = np.array(image_data.header.get_zooms())
+    shape = image_data.get_fdata().shape * (current_voxel_sizes/target_voxel_size)
+    new_image_data = resize(image_data.get_fdata(), output_shape=shape, mode='constant')
+    print("image reshaped from ", image_data.get_fdata().shape , " to ", new_image_data.shape)
+    return new_image_data
+
 def add_image():
-    global file_path, nii_2d_image, nii_3d_image_original, nii_3d_image, file_selected, original_canvas_width, original_canvas_height, nii_file, voxel_size
+    global file_path, nii_3d_image_original, nii_3d_image, file_selected, voxel_size, original_canvas_width, original_canvas_height
     filters.delete_temp()
     # Get the dimensions of the canvas
     original_canvas_width = canvas_frame.winfo_width()
@@ -245,43 +254,41 @@ def add_image():
     if file_path:
         try:
             # reading file
-            nii_file = nib.load(file_path)
+            nii_file_original = nib.load(file_path)
+            nii_file = nib.load(file_path).get_fdata()
+            nii_file.shape
 
-            # getting data
-            nii_3d_image = nii_file.get_fdata()[:,:,:]
-            nii_3d_image_original = nii_3d_image
-            print("image loaded ")
-            
             # Access the header metadata
-            header = nii_file.header
-            # Print the header metadata
-            # Get the dimensions of the NIfTI image
-            dimensions = header.get_data_shape()
-            print("Dimensions:", dimensions)
+            header = nii_file_original.header
             # Get voxel sizes
             voxel_sizes = header.get_zooms()
-            voxel_size = np.min(voxel_sizes)
-            print("Voxel Sizes:", voxel_sizes)
+            min_voxel_size = min(voxel_sizes)
+            voxel_size = min_voxel_size
+            print("Original Voxel Sizes:", voxel_sizes)
+            print("Minimum Voxel Size:", min_voxel_size)
 
-            # Get data type
-            data_type = header.get_data_dtype()
-            print("Data Type:", data_type)
-            
-            upper_sigma = filters.mm2voxel(3, voxel_size)
-            hVar2.set(upper_sigma)
-            
+            # Resample the image data to ensure cubic voxels
+            nii_file_resampled = resample_image(nii_file_original, min_voxel_size)
+            nii_3d_image = nii_file_resampled
+            nii_3d_image_original = nii_3d_image
+
+            target_sigma = 3 ##mm
+            delta_sigma = target_sigma / 10
+            hVar2.set(target_sigma + delta_sigma)
+            hVar1.set(target_sigma - delta_sigma)
+
             # runs function to update background
             plot_image()
             restore_original()
             file_selected = True
             root.resizable(True, True)
-            mriqc.workflow.run(file_path, '/temp', 'participant', noise=True)
+            print("Image loaded ", nii_3d_image.shape)
 
-            
         except Exception as e:
             print("Error loading image:", e)
     else:
         print("No file selected")
+
     
 def apply_gaussian_3d():
         global nii_3d_image, gaussian_intensity
@@ -290,7 +297,9 @@ def apply_gaussian_3d():
 
 def apply_frangi():
     global nii_3d_image
-    nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,(hVar1.get()/2,hVar2.get()/2), alpha_val, beta_val, step_val, isblack)
+    var1 = filters.mm2voxel(hVar1.get(), voxel_size)
+    var2 = filters.mm2voxel(hVar2.get(), voxel_size)
+    nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,(var1/2,var2/2), alpha_val, beta_val, step_val, isblack)
     plot_image()
 
 def save_file():
@@ -339,7 +348,7 @@ def update_scale_range_label(*args):
     value2 = hVar2.get()
     
     # Format the values into the label text
-    text_val = "Target diameter: \n{:.2f} to {:.2f}".format(value1, value2)
+    text_val = "Target diameter: \n{:.2f} to {:.2f} mm".format(value1, value2)
     
     # Update the label text
     scale_range.configure(text=text_val)
@@ -395,7 +404,9 @@ def filters_window():
     
     def apply_sci_frangi():
         global nii_3d_image
-        nii_3d_image = filters.sci_frangi(nii_3d_image_original,(hVar1.get(),hVar2.get()), alpha_val, beta_val, step_val, 1)
+        var1 = filters.mm2voxel(hVar1.get(), voxel_size)
+        var2 = filters.mm2voxel(hVar2.get(), voxel_size)
+        nii_3d_image = filters.sci_frangi(nii_3d_image_original,(var1/2,var2/2), alpha_val, beta_val, step_val, 1)
         plot_image()
     
     def cancel_filter():
@@ -616,12 +627,12 @@ scales_frame = tk.Frame(frangi_frame)
 scales_frame.grid(row=0, column=1)
 
 #scales range slider
-text_val = "Target diameter: \n{:.2f} to {:.2f}".format(hVar1.get(), hVar2.get())
+text_val = "Target diameter: \n{:.2f} to {:.2f} mm".format(hVar1.get(), hVar2.get())
 scale_range = ctk.CTkLabel(scales_frame, text=text_val)
 scale_range.pack(pady=(20, 0), anchor='s')
 
 # scale range slider
-scale_range_slider = RangeSliderH(scales_frame, [hVar1, hVar2], Width=130, Height=48, padX=17, min_val=0.001, bgColor=frangi_frame.cget('bg'), max_val=120, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
+scale_range_slider = RangeSliderH(scales_frame, [hVar1, hVar2], Width=130, Height=48, padX=17, min_val=0.001, bgColor=frangi_frame.cget('bg'), max_val=100, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
 scale_range_slider.pack()
 
 hVar1.trace_add("write", update_scale_range_label)
@@ -652,7 +663,7 @@ alpha_label.pack()
 
 # alpha slider
 alpha_slider = ctk.CTkSlider(master=alpha_frame, from_=0.001, to=1,number_of_steps=300, command=change_alpha, width=100)
-alpha_slider.set(0.1)
+alpha_slider.set(alpha_val)
 alpha_slider.pack()
 
 # beta frame
@@ -665,7 +676,7 @@ vessel_length_label = ctk.CTkLabel(beta_frame, text=text_val)
 vessel_length_label.pack()
 
 beta_slider = ctk.CTkSlider(master=beta_frame, from_=0.001, to=1,number_of_steps=300, command=change_beta, width=100)
-beta_slider.set(0.80)
+beta_slider.set(beta_val)
 beta_slider.pack()
 
 # label for the pen mode
@@ -687,8 +698,8 @@ rangeicon_right_image.thumbnail((30, 30))
 rangeicon_left = ImageTk.PhotoImage(rangeicon_left_image)
 rangeicon_right = ImageTk.PhotoImage(rangeicon_right_image)
 
-alphaicon_right_path = "img/alpha1.png"
-alphaicon_left_path = "img/alpha2.png"
+alphaicon_right_path = "img/alpha2.png"
+alphaicon_left_path = "img/alpha1.png"
 alphaicon_left_image = Image.open(alphaicon_left_path)
 alphaicon_right_image = Image.open(alphaicon_right_path)
 alphaicon_left_image.thumbnail((30, 30))  
@@ -696,8 +707,8 @@ alphaicon_right_image.thumbnail((30, 30))
 alphaicon_left = ImageTk.PhotoImage(alphaicon_left_image)
 alphaicon_right = ImageTk.PhotoImage(alphaicon_right_image)
 
-betaicon_right_path = "img/beta2.png"
-betaicon_left_path = "img/beta1.png"
+betaicon_right_path = "img/beta1.png"
+betaicon_left_path = "img/beta2.png"
 betaicon_left_image = Image.open(betaicon_left_path)
 betaicon_right_image = Image.open(betaicon_right_path)
 betaicon_left_image.thumbnail((30, 30))  

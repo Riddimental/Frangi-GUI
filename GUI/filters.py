@@ -34,7 +34,7 @@ def delete_temp():
 
 def mm2voxel(mm, voxel_size):
    num_voxels = mm / voxel_size
-   print("for a voxel size of ",voxel_size,", ",mm, "mm's of diameter is ",num_voxels," voxels")
+   print("for a voxel size of ",voxel_size," cubic mm, ",mm, "mm's of diameter is ",num_voxels," voxels")
    return num_voxels #returns the diameter
 
 def intensity_rescale(image, new_min=0, new_max=1):
@@ -100,6 +100,7 @@ def sci_frangi(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cval=1):
 def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, black_vessels=True):
    # Ensure input image is of type float64
    image = image.astype(np.float64)
+   image /= np.max(image) # image normalized
    up_limit = np.max(image)
    
    if black_vessels:
@@ -116,11 +117,11 @@ def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, bla
       eigenvalues = compute_hessian_return_eigvals(image, sigma=scale)
       #print("shapes eigs are ", eigenvalues.shape)
       output = compute_vesselness(eigenvalues, alpha, beta).astype(np.float64)
-      vesselness += output
+      vesselness += output/np.max(output)
       scale += division
    
    print("Frangi filter applied.")
-   return vesselness
+   return vesselness/np.max(vesselness)
 
 def compute_eig_vals(hessian):
    # Compute eigenvalues
@@ -167,7 +168,6 @@ def compute_hessian_return_eigvals(_3d_image_array, sigma=1):
    #print("hessian shape ", hessian.shape)
 
    # Compute the norm of the structure tensors for cval and Compute eigenvalues
-   cvals = np.zeros_like(_3d_image_array)
    eig_vals = np.zeros((_3d_image_array.shape[0], _3d_image_array.shape[1], _3d_image_array.shape[2], 3))
    
    eig_vals = compute_eig_vals(hessian)
@@ -192,7 +192,7 @@ def compute_vesselness(eigvals, alpha, beta):
    Rb = divide_nonzero(np.abs(lambdas1), np.sqrt(np.abs(np.multiply(lambdas2, lambdas3))))
    #print("Rb shapes ", Rb.shape)
    S = np.sqrt(np.square(lambdas1) + np.square(lambdas2) + np.square(lambdas3))
-   #print("S2 shapes ", S.shape)
+   #print("S : ", S.max())
    
    gamma = S.max() / 2
    if gamma == 0:

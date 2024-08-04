@@ -7,3 +7,5 @@ matplotlib
 Pillow
 opencv-python
 virtualenv
+torch
+torchvision

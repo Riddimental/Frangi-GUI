@@ -8,6 +8,7 @@ import tkinter as tk
 import nibabel as nib
 import matplotlib.pyplot as plt
 import filters
+import frangi_tensor
 from tkinter import Toplevel, filedialog
 from PIL import Image, ImageTk
 from RangeSlider.RangeSlider import RangeSliderH
@@ -198,7 +199,6 @@ def refresh_image():
 # function to plot the readed .nii image
 def plot_image():
     global max_value, nii_2d_image, nii_3d_image, slice_portion, max_slice
-    
     # selecting a slice out of the 3d image
     if(view_mode.get() == "Coronal"): # im the y axis "Coronal"
         max_slice = nii_3d_image.shape[1]
@@ -265,11 +265,15 @@ def add_image():
             min_voxel_size = min(voxel_sizes)
             voxel_size = min_voxel_size
             print("Original Voxel Sizes:", voxel_sizes)
-            print("Minimum Voxel Size:", min_voxel_size)
+            #print("Minimum Voxel Size:", min_voxel_size)
 
             # Resample the image data to ensure cubic voxels
-            nii_file_resampled = resample_image(nii_file_original, min_voxel_size)
-            nii_3d_image = nii_file_resampled
+            if all(v == voxel_sizes[0] for v in voxel_sizes): #no need to resize
+                nii_3d_image = nii_file
+                print("no resample required")
+            else:
+                nii_file_resampled = resample_image(nii_file_original, min_voxel_size)
+                nii_3d_image = nii_file_resampled
             nii_3d_image_original = nii_3d_image
 
             target_sigma = 3 ##mm
@@ -299,7 +303,8 @@ def apply_frangi():
     global nii_3d_image
     var1 = filters.mm2voxel(hVar1.get(), voxel_size)
     var2 = filters.mm2voxel(hVar2.get(), voxel_size)
-    nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,(var1/2,var2/2), alpha_val, beta_val, step_val, isblack)
+    nii_3d_image = frangi_tensor.my_frangi_filter(nii_3d_image_original,(var1/2,var2/2), alpha_val, beta_val, step_val, isblack)
+    # nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,(var1/2,var2/2), alpha_val, beta_val, step_val, isblack)
     plot_image()
 
 def save_file():
@@ -334,11 +339,11 @@ def change_alpha(val):
 def change_black_vessels():
     global black_vessels, isblack
     if black_vessels.get() == 1:
-        black_vessels_switch.configure(text="True")
+        black_vessels_switch.configure(text="Black")
         isblack = True
         print("Black Vessels True")
     else:
-        black_vessels_switch.configure(text="False")
+        black_vessels_switch.configure(text="White")
         isblack = False
         print("Black Vessels False")
 
@@ -648,7 +653,8 @@ step_value_label = ctk.CTkLabel(c_frame, text=text_val)
 step_value_label.pack()
 
 # scale step slider
-scale_steps_slider = ctk.CTkSlider(master=c_frame, from_=1, to=10,number_of_steps=9, command=change_scale_step, width=100)
+max_val = 100
+scale_steps_slider = ctk.CTkSlider(master=c_frame, from_=1, to=max_val,number_of_steps=max_val-1, command=change_scale_step, width=100)
 scale_steps_slider.set(step_val)
 scale_steps_slider.pack()
 
@@ -680,11 +686,11 @@ beta_slider.set(beta_val)
 beta_slider.pack()
 
 # label for the pen mode
-switch_label = ctk.CTkLabel(frangi_frame, text="Black Vessels:")
+switch_label = ctk.CTkLabel(frangi_frame, text="Vessels:")
 switch_label.grid(row=4, column=1, pady=5)
 
 # switch to mark background and foreground
-black_vessels_switch = ctk.CTkSwitch(frangi_frame,text="True", variable=black_vessels, command=change_black_vessels)
+black_vessels_switch = ctk.CTkSwitch(frangi_frame,text="Black", variable=black_vessels, command=change_black_vessels)
 black_vessels_switch.grid(row=5, column=1, pady=1)
 
 #icons for sliders

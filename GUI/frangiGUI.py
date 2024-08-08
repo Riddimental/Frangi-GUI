@@ -9,11 +9,10 @@ import nibabel as nib
 import matplotlib.pyplot as plt
 import filters
 import frangi_tensor
-from tkinter import Toplevel, filedialog
+from tkinter import Toplevel, filedialog, ttk
 from PIL import Image, ImageTk
 from RangeSlider.RangeSlider import RangeSliderH
 import napari
-import json
 from scipy.ndimage import zoom
 from skimage.transform import resize
 
@@ -50,9 +49,12 @@ if not os.path.exists(temp_directory):
 
 # Defining global variables
 max_value = 0
-alpha_val = 0.80
-beta_val=0.1
+alpha_val = 0.5
+beta_val=0.5
 step_val = 1
+sigmas = []
+sigma_val = 3
+isbasic = False
 black_vessels = tk.IntVar()
 black_vessels.set(1)
 isblack = True
@@ -111,43 +113,6 @@ def on_window_resize(event):
         # print('me movi a las ', current_time)
     except Exception as e:
         pass
-
-
-def refresh_imageold():
-    global selection_image, scale_factor, original_canvas_height, original_canvas_width
-    # giving the function time to avoid over-refreshing
-    plot_image = Image.open("temp/plot.jpeg")
-    
-    # Get the dimensions of the canvas
-    canvas_width = canvas_frame.winfo_width()
-    canvas_height = canvas_frame.winfo_height()
-
-    # Calculate the scaling factor to fit the canvas while preserving proportions
-    scale_factor = min(canvas_width / plot_image.width, canvas_height / plot_image.height)
-
-    # Calculate the new dimensions
-    new_width = int(plot_image.width * scale_factor)
-    new_height = int(plot_image.height * scale_factor)
-    
-    if new_height >= original_canvas_height:
-        new_height = original_canvas_height
-    if new_width >= original_canvas_width:
-        new_width = original_canvas_width
-
-    picture_canvas.config(width=new_width, height=new_height)
-    # Resize the image
-    plot_image = plot_image.resize((new_width, new_height))
-
-    # Printing the picture in the canvas
-    image = ImageTk.PhotoImage(plot_image)
-    picture_canvas.image = image
-
-    # adjusting the canvas to be the same size as the plot
-    picture_canvas.config(width=plot_image.width, height=plot_image.height)
-
-    # Print the image centered within the canvas
-    picture_canvas.create_image(0, 0, image=image, anchor="nw")
-    
 
 # function to refresh the canva with the lates plot update
 def refresh_image():
@@ -226,8 +191,9 @@ def plot_image():
     refresh_image()
     
     #tk.Label(frangi_frame).pack(pady=0)
-    frangi_frame.grid(row=3, padx=0)
-    file_tools_frame.grid(row=4, column=0, pady=10, padx=20)
+    segmentation_tabs.grid(row=3)
+    frangi_frame.grid(row=4, padx=0)
+    file_tools_frame.grid(row=5, pady=10, padx=20)
     apply_frangi_button.pack(pady=5)
     view_3D_button.pack(pady=5)
     save_file_button.pack(pady=5)
@@ -250,7 +216,7 @@ def add_image():
     # Get the dimensions of the canvas
     original_canvas_width = canvas_frame.winfo_width()
     original_canvas_height = canvas_frame.winfo_height()
-    file_path = filedialog.askopenfilename(filetypes=[("NIfTI files", "*.nii")])
+    file_path = filedialog.askopenfilename(filetypes=[("NIfTI files", "*.gz *.nii *.nii.gz")])
     if file_path:
         try:
             # reading file
@@ -295,16 +261,28 @@ def add_image():
 
     
 def apply_gaussian_3d():
-        global nii_3d_image, gaussian_intensity
+        global nii_3d_image
         nii_3d_image = filters.gaussian3d(nii_3d_image,gaussian_intensity)
         plot_image()    
 
 def apply_frangi():
+    """
+    Apply the Frangi filter to the input image based on the user's input parameters.
+    """
     global nii_3d_image
-    var1 = filters.mm2voxel(hVar1.get(), voxel_size)
-    var2 = filters.mm2voxel(hVar2.get(), voxel_size)
-    nii_3d_image = frangi_tensor.my_frangi_filter(nii_3d_image_original,(var1/2,var2/2), alpha_val, beta_val, step_val, isblack)
-    # nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,(var1/2,var2/2), alpha_val, beta_val, step_val, isblack)
+    
+    if isbasic:
+        # If the user has selected the basic option, apply the Frangi filter with a single scale value
+        sigma = filters.mm2voxel(sigma_val, voxel_size) / 2
+        sigmas = [sigma]
+    else:
+        # If the user has selected the advanced option, apply the Frangi filter with a range of scale values
+        var1 = filters.mm2voxel(hVar1.get(), voxel_size) / 2
+        var2 = filters.mm2voxel(hVar2.get(), voxel_size) / 2
+        sigmas = np.linspace(var1, var2, step_val + 1)
+    
+    # Apply the Frangi filter to the input image
+    nii_3d_image = frangi_tensor.my_frangi_filter(nii_3d_image_original, sigmas, alpha_val, beta_val, isblack)
     plot_image()
 
 def save_file():
@@ -347,6 +325,15 @@ def change_black_vessels():
         isblack = False
         print("Black Vessels False")
 
+def switch_mode(event=None):
+    global isbasic
+    if isbasic:
+        print("Advanced mode")
+        isbasic = False
+    else:
+        print("Basic mode")
+        isbasic = True
+
 def update_scale_range_label(*args):
     # Retrieve the values stored in the DoubleVar objects
     value1 = hVar1.get()
@@ -363,6 +350,13 @@ def change_beta(val):
     beta_val = float(val)
     text_val = "Beta: {:.2f}".format(beta_val)
     vessel_length_label.configure(text=text_val)
+    
+def change_sigma_val(val):
+    global sigma_val
+    sigma_val = float(val)
+    filters.gaussian_preview(nii_2d_image,sigma_val/2)
+    text_val = "Diameter: {:.2f} mm".format(sigma_val)
+    diameter_label.configure(text=text_val)
     
 def change_scale_step(val):
     global step_val
@@ -397,7 +391,7 @@ def filters_window():
         # Truncate intensity to ensure it's an integer and make it odd
         kernel_size = val
         gaussian_intensity = kernel_size
-        filters.gaussian_preview(nii_2d_image,gaussian_intensity)
+        filters.gaussian_preview(nii_2d_image,gaussian_intensity/2)
         text_val = "Gaussian Intensity: {:.1f}".format(gaussian_intensity)
         label_Gaussian.configure(text=text_val)
         refresh_image()
@@ -409,9 +403,7 @@ def filters_window():
     
     def apply_sci_frangi():
         global nii_3d_image
-        var1 = filters.mm2voxel(hVar1.get(), voxel_size)
-        var2 = filters.mm2voxel(hVar2.get(), voxel_size)
-        nii_3d_image = filters.sci_frangi(nii_3d_image_original,(var1/2,var2/2), alpha_val, beta_val, step_val, 1)
+        nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,sigmas, alpha_val, beta_val, isblack)
         plot_image()
     
     def cancel_filter():
@@ -491,7 +483,7 @@ def filters_window():
     sci_frangi_label.pack(pady=15)
     
     # Scikit Frangi button
-    gaussian_button = ctk.CTkButton(master=sci_frangi_frame, text="Apply Scikit Frangi", command=apply_sci_frangi, width=120)
+    gaussian_button = ctk.CTkButton(master=sci_frangi_frame, text="old Frangi", command=apply_sci_frangi, width=120)
     gaussian_button.pack(pady=5)
     
     # Thresholding frame
@@ -631,32 +623,54 @@ frangi_frame = tk.Frame(left_frame_canvas)
 scales_frame = tk.Frame(frangi_frame)
 scales_frame.grid(row=0, column=1)
 
-#scales range slider
+#Frangi options tabs
+segmentation_tabs = ttk.Notebook(master=left_frame_canvas)
+
+#basic tab
+basic_tab = ttk.Frame(segmentation_tabs)
+text_sigma_val = "Diameter: {:.2f} mm".format(sigma_val)
+diameter_label = ctk.CTkLabel(basic_tab, text=text_sigma_val)
+diameter_label.pack(pady=5, padx=0)
+
+diameter_slider = ctk.CTkSlider(basic_tab, from_=0.0, to=100.0, command=change_sigma_val, width=120)
+diameter_slider.set(sigma_val)
+diameter_slider.pack(padx=20, pady=5)
+
+segmentation_tabs.add(basic_tab, text="Basic")
+segmentation_tabs.bind("<<NotebookTabChanged>>", switch_mode)
+
+#Advanced tab
+advanced_tab = ttk.Frame(segmentation_tabs)
+
+#scales range slider in advanced tab
 text_val = "Target diameter: \n{:.2f} to {:.2f} mm".format(hVar1.get(), hVar2.get())
-scale_range = ctk.CTkLabel(scales_frame, text=text_val)
-scale_range.pack(pady=(20, 0), anchor='s')
+scale_range = ctk.CTkLabel(advanced_tab, text=text_val)
+scale_range.pack(pady=(5,0))
 
 # scale range slider
-scale_range_slider = RangeSliderH(scales_frame, [hVar1, hVar2], Width=130, Height=48, padX=17, min_val=0.001, bgColor=frangi_frame.cget('bg'), max_val=100, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
-scale_range_slider.pack()
+scale_range_slider = RangeSliderH(advanced_tab, [hVar1, hVar2], Width=130, Height=30, padX=5, min_val=0.001, bgColor=frangi_frame.cget('bg'), max_val=100, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
+scale_range_slider.pack(padx=5, pady=(0,2))
 
 hVar1.trace_add("write", update_scale_range_label)
 hVar2.trace_add("write", update_scale_range_label)
 
-# scale step frame
-c_frame = tk.Frame(frangi_frame)
-c_frame.grid(row=1, column=1)
+# scale step frame in advanced tab
+scale_frame = tk.Frame(advanced_tab)
+scale_frame.pack(pady=(0,5))
 
 # scale step label
 text_val = "Scale Step: {:}".format(step_val)
-step_value_label = ctk.CTkLabel(c_frame, text=text_val)
-step_value_label.pack()
+step_value_label = ctk.CTkLabel(scale_frame, text=text_val)
+step_value_label.pack(pady=6, padx=0, anchor='w')
 
 # scale step slider
 max_val = 100
-scale_steps_slider = ctk.CTkSlider(master=c_frame, from_=1, to=max_val,number_of_steps=max_val-1, command=change_scale_step, width=100)
+scale_steps_slider = ctk.CTkSlider(master=scale_frame, from_=1, to=max_val,number_of_steps=max_val-1, command=change_scale_step, width=100)
 scale_steps_slider.set(step_val)
-scale_steps_slider.pack()
+scale_steps_slider.pack(pady=(0, 6), padx=0, anchor='w')
+
+segmentation_tabs.add(advanced_tab, text="Advanced")
+segmentation_tabs.bind("<<NotebookTabChanged>>", switch_mode)
 
 # alpha frame
 alpha_frame = tk.Frame(frangi_frame)
@@ -713,11 +727,11 @@ alphaicon_right_image.thumbnail((30, 30))
 alphaicon_left = ImageTk.PhotoImage(alphaicon_left_image)
 alphaicon_right = ImageTk.PhotoImage(alphaicon_right_image)
 
-betaicon_right_path = "img/beta1.png"
-betaicon_left_path = "img/beta2.png"
+betaicon_right_path = "img/beta2.png"
+betaicon_left_path = "img/beta1.png"
 betaicon_left_image = Image.open(betaicon_left_path)
 betaicon_right_image = Image.open(betaicon_right_path)
-betaicon_left_image.thumbnail((30, 30))  
+betaicon_left_image.thumbnail((10, 10))  
 betaicon_right_image.thumbnail((30, 30))  
 betaicon_left = ImageTk.PhotoImage(betaicon_left_image)
 betaicon_right = ImageTk.PhotoImage(betaicon_right_image)
@@ -731,19 +745,6 @@ c_icon_right_image.thumbnail((40, 40))
 c_icon_left = ImageTk.PhotoImage(c_icon_left_image)
 c_icon_right = ImageTk.PhotoImage(c_icon_right_image)
 
-# Create labels for icons
-rangeicon_label_left = tk.Label(frangi_frame, image=rangeicon_left)
-rangeicon_label_left.grid(row=0, column=0, padx=10, sticky='s')  
-
-rangeicon_label_right = tk.Label(frangi_frame, image=rangeicon_right)
-rangeicon_label_right.grid(row=0, column=2, padx=10, sticky='s')  
-
-c_icon_label_left = tk.Label(frangi_frame, image=c_icon_left)
-c_icon_label_left.grid(row=1, column=0, padx=10, sticky='s')  
-
-c_icon_label_right = tk.Label(frangi_frame, image=c_icon_right)
-c_icon_label_right.grid(row=1, column=2, padx=10, sticky='s')  
-
 alphaicon_label_left = tk.Label(frangi_frame, image=alphaicon_left)
 alphaicon_label_left.grid(row=2, column=0, padx=10, sticky='s')  
 
@@ -755,14 +756,6 @@ betaicon_label_left.grid(row=3, column=0, padx=10, sticky='s')
 
 betaicon_label_right = tk.Label(frangi_frame, image=betaicon_right)
 betaicon_label_right.grid(row=3, column=2, padx=10, sticky='s')  
-
-
-
-
-
-
-
-
 
 # file tools frame
 file_tools_frame = tk.Frame(left_frame_canvas)

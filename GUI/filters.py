@@ -97,28 +97,22 @@ def sci_frangi(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cval=1):
    print("sci-kit frangi applied")
    return processed
 
-def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, black_vessels=True):
+def my_frangi_filter(image, sigmas=[1], alpha=1, beta=0.5, black_vessels=True):
    # Ensure input image is of type float64
    image = image.astype(np.float64)
    image /= np.max(image) # image normalized
-   up_limit = np.max(image)
    
    if black_vessels:
         image = -image
-        image = intensity_rescale(image,0,up_limit) # invert the image and keep proportions
 
-   division = (scale_range[1] - scale_range[0]) / steps
    vesselness = np.zeros_like(image)
-   print('Scales from', scale_range[0], 'to', scale_range[1], 'in', steps, 'steps.')
    
-   scale = scale_range[0]
-   while scale <= scale_range[1]:
-      print('Current scale:', scale)
-      eigenvalues = compute_hessian_return_eigvals(image, sigma=scale)
+   for sigma in sigmas:
+      print('Current scale:', sigma)
+      eigenvalues = compute_hessian_return_eigvals(image, sigma=sigma)
       #print("shapes eigs are ", eigenvalues.shape)
       output = compute_vesselness(eigenvalues, alpha, beta).astype(np.float64)
-      vesselness += output/np.max(output)
-      scale += division
+      vesselness += output
    
    print("Frangi filter applied.")
    return vesselness/np.max(vesselness)

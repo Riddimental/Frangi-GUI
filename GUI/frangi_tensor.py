@@ -1,11 +1,8 @@
 import torch
-from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import scipy.ndimage as ndi
-import cv2
-import torch.nn.functional as F
 
-def apply_gaussian_blur_3d(image, sigma):
+def apply_gaussian_blur_3d(image: torch.Tensor, sigma: float) -> torch.Tensor:
    """
    Apply 3D Gaussian blur to the image using scipy's gaussian_filter.
    """
@@ -13,20 +10,20 @@ def apply_gaussian_blur_3d(image, sigma):
    image = image.cpu().numpy()
    
    # Apply Gaussian filter
-   blurred_image = ndi.gaussian_filter(image, sigma=sigma)
+   blurred_image = ndi.gaussian_filter(image, sigma=sigma, mode='nearest')
    
    # Convert back to torch tensor
    blurred_image = torch.tensor(blurred_image, dtype=torch.float32, device=image.device)
    return blurred_image
 
-def divide_nonzero(a, b):
+def divide_nonzero(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
    """
    Divide elements of a by b, handling division by zero.
    """
    result = torch.where(b != 0, a / b, torch.zeros_like(a))
    return result
 
-def compute_vesselness(eigvals, alpha, beta):
+def compute_vesselness(eigvals: torch.Tensor, alpha: float, beta: float) -> torch.Tensor:
    """
    Compute vesselness measure from Hessian eigenvalues.
    """
@@ -47,7 +44,10 @@ def compute_vesselness(eigvals, alpha, beta):
 
    return vesselness
 
-def compute_eig_vals(hessian):
+def compute_eig_vals(hessian: torch.Tensor) -> torch.Tensor:
+   """
+   Compute eigenvalues of the Hessian matrix.
+   """
    # Convert the tensor to a NumPy array
    hessian_np = hessian.cpu().numpy()
    
@@ -55,11 +55,11 @@ def compute_eig_vals(hessian):
    eigvals = np.linalg.eigvals(hessian_np.transpose(2, 3, 4, 0, 1))  # Move the 3x3 matrices to the last dimensions
 
    # Sort eigenvalues in descending order
-   sorted_eigvals = -np.sort(-eigvals, axis=-1)
+   sorted_eigvals = np.sort(eigvals, axis=-1)
    print("evigvals done")
    return torch.from_numpy(sorted_eigvals)
 
-def compute_hessian_return_eigvals(image, sigma=1):
+def compute_hessian_return_eigvals(image: torch.Tensor, sigma: float = 1) -> torch.Tensor:
    """
    Compute the Hessian matrix and its eigenvalues using convolutions.
    """
@@ -82,27 +82,35 @@ def compute_hessian_return_eigvals(image, sigma=1):
    
    return eig_vals
 
-def my_frangi_filter(input_image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, black_vessels=True):
-   tensor_image = torch.tensor(input_image, dtype=torch.float64)  # Asegura que la imagen sea de tipo float64
-   tensor_image /= tensor_image.max()  # Normaliza la imagen
+def my_frangi_filter(input_image: np.ndarray, sigmas: list = [1], alpha: float = 1, beta: float = 0.5, black_vessels: bool = True) -> np.ndarray:
+   """
+   Apply the Frangi filter to an input image.
 
-   if black_vessels:
+   Parameters:
+   - input_image: (np.ndarray) The input image.
+   - sigmas: (list) The scales at which to apply the filter.
+   - alpha: (float) The first parameter of the vesselness measure.
+   - beta: (float) The second parameter of the vesselness measure.
+   - black_vessels: (bool) Whether to invert the image before applying the filter.
+
+   Returns:
+   - (np.ndarray) The vesselness map of the input image.
+   """
+   tensor_image = torch.tensor(input_image, dtype=torch.float64)  # Ensure image is of type float64
+   tensor_image /= tensor_image.max()  # Normalize the image
+
+   if not black_vessels:
       tensor_image = -tensor_image
       print('image inverted')
-      #image = intensity_rescale(image, 0, up_limit)  # Invertir y reescalar la imagen
-
-   division = (scale_range[1] - scale_range[0]) / steps
    vesselness = torch.zeros_like(tensor_image)
-   print('Scales from', scale_range[0], 'to', scale_range[1], 'in', steps, 'steps.')
-
-   scale = scale_range[0]
-   while scale <= scale_range[1]:
-      print('Current scale:', scale)
-      eigenvalues = compute_hessian_return_eigvals(tensor_image, sigma=scale)
+   print("Sigmas:", sigmas)
+   for sigma in sigmas:
+      print('Current scale:', sigma)
+      eigenvalues = compute_hessian_return_eigvals(tensor_image, sigma=sigma)
       output = compute_vesselness(eigenvalues, alpha, beta).real
-      vesselness += output / output.max()
-      scale += division
+      vesselness = torch.max(vesselness, output)
 
    print("Frangi filter applied.")
    vesselness_np = vesselness.cpu().numpy()
    return vesselness_np / vesselness_np.max()
+

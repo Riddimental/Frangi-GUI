@@ -1,5 +1,6 @@
 import math
 import cv2
+import time
 import nibabel as nib
 #np.set_printoptions(threshold=sys.maxsize)
 import matplotlib.pyplot as plt
@@ -12,6 +13,7 @@ import scipy.ndimage as ndi
 from skimage import filters
 from scipy.linalg import eigvals, norm
 from itertools import combinations_with_replacement
+from skimage.transform import resize
 
 def delete_temp():
    # Delete the contents of the temp folder
@@ -32,10 +34,46 @@ def delete_temp():
    else:
       print(f"The folder {folder_path} does not exist.")
 
+def resample_image(image_data, target_voxel_size):
+   current_voxel_sizes = np.array(image_data.header.get_zooms())
+   shape = image_data.get_fdata().shape * (current_voxel_sizes/target_voxel_size)
+   new_image_data = resize(image_data.get_fdata(), output_shape=shape, mode='constant')
+   print("image reshaped from ", image_data.get_fdata().shape , " to ", new_image_data.shape)
+   return new_image_data
+
+
 def mm2voxel(mm, voxel_size):
    num_voxels = mm / voxel_size
-   print("for a voxel size of ",voxel_size," cubic mm, ",mm, "mm's of diameter is ",num_voxels," voxels")
+   #print("for a voxel size of ",voxel_size," cubic mm, ",mm, "mm's of diameter is ",num_voxels," voxels")
    return num_voxels #returns the diameter
+
+def voxel2mm(num_voxels, voxel_size):
+    mm = num_voxels * voxel_size
+    #print("for a voxel size of ",voxel_size," cubic mm, ",num_voxels, " voxels is equivalent to ",mm," mm")
+    return mm  # returns the diameter in mm
+
+def calculate_noise(input):
+   img_data = input
+   corner_size = [int(dim * 0.05) for dim in img_data.shape]
+   corners = [
+      img_data[:corner_size[0], :corner_size[1], :corner_size[2]], # (0,0,0)
+      img_data[-corner_size[0]:, :corner_size[1], :corner_size[2]], # (end,0,0)
+      img_data[:corner_size[0], -corner_size[1]:, :corner_size[2]], # (0,end,0)
+      img_data[:corner_size[0], :corner_size[1], -corner_size[2]:], # (0,0,end)
+      img_data[-corner_size[0]:, -corner_size[1]:, :corner_size[2]], # (end,end,0)
+      img_data[-corner_size[0]:, :corner_size[1], -corner_size[2]:], # (end,0,end)
+      img_data[:corner_size[0], -corner_size[1]:, -corner_size[2]:], # (0,end,end)
+      img_data[-corner_size[0]:, -corner_size[1]:, -corner_size[2]:], # (end,end,end)
+   ]
+
+   # Combine all the corner samples into one large sample
+   large_sample = np.concatenate([corner.flatten() for corner in corners])
+
+   # Calculate the standard deviation of the large sample
+   std_deviation_corners = np.std(large_sample)
+   
+   print(f'Estimated sigma (σ) for the homogeneous region: {std_deviation_corners}')
+   return std_deviation_corners
 
 def intensity_rescale(image, new_min=0, new_max=1):
    """
@@ -80,10 +118,13 @@ def thresholding2d(data, threshold):
    transformed_image = data > threshold
    plt.imsave("temp/plot.jpeg", transformed_image, cmap = 'gray')
 
-def gaussian_preview(data, intensity):
+def gaussian_preview(data, intensity, root=None):
    data = ndi.gaussian_filter(data, intensity)
-   plt.imsave("temp/plot.jpeg", data, cmap='gray')
-   #plt.close()
+   if(root):
+      root.after(15, plt.imsave("temp/plot.jpeg", data, cmap='gray'))
+   else:
+      plt.imsave("temp/plot.jpeg", data, cmap='gray')
+   
 
 def gaussian3d(data3D, intensity):
    kernel_size = max(1, math.trunc(intensity))

@@ -1,5 +1,7 @@
+import getpass
 import os
 import sys
+import threading
 import time
 import customtkinter as ctk
 import cv2
@@ -20,24 +22,25 @@ root = ctk.CTk()
 
 # Window dimensions and centering
 window_width = 850
-window_height = 700
+window_height = 720
 last_resize_time = 0
 voxel_size = 1 #mm
+min_voxel_size = 0
 resize_interval = 1 / 60  # Tiempo mínimo entre ejecuciones en segundos (60 fps)
 screen_width = root.winfo_screenwidth()
 screen_height = root.winfo_screenheight()
-ctk.set_appearance_mode="light"
+image_name = ""
 x = (screen_width - window_width) // 2
 y = (screen_height - window_height) // 2
 root.geometry(f"{window_width}x{window_height}+{x}+{y}")
 root.title("Frangi MRI")
 # Make the window not resizable
-#root.resizable(False, False)
+root.minsize(window_width, window_height)
 
 hVar1 = tk.DoubleVar()
 hVar1.set(0.1)# left handle variable
 hVar2 = tk.DoubleVar()
-hVar2.set(2)# right handle variable
+hVar2.set(2.0)# right handle variable
 
 # Ruta del directorio "temp"
 temp_directory = "temp"
@@ -53,7 +56,7 @@ alpha_val = 0.5
 beta_val=0.5
 step_val = 1
 sigmas = []
-sigma_val = 3
+sigma_val = 1.5
 isbasic = False
 black_vessels = tk.IntVar()
 black_vessels.set(1)
@@ -86,9 +89,11 @@ root.protocol("WM_DELETE_WINDOW", close_program)
 
 def open_napari():
     global nii_3d_image
+    hold_button(view_3D_button)
     viewer = napari.Viewer()
     viewer.add_image(nii_3d_image, name='3D Image')
     viewer.dims.ndisplay = 3
+    refresh_text("Opening napari viewer...")
     
     # Hide the layer controls
     viewer.window.qt_viewer.dockLayerControls.toggleViewAction().trigger()
@@ -96,6 +101,7 @@ def open_napari():
 
     # Show the viewer
     viewer.window.show()
+    release_button(view_3D_button)
 
 def on_window_resize(event):
     global original_canvas_width, original_canvas_height, last_resize_time, file_selected
@@ -187,8 +193,8 @@ def plot_image():
     
     plt.imsave("temp/plot.jpeg", nii_2d_image, cmap='gray')
     #plt.close()
+    root.after(15, refresh_image())
     
-    refresh_image()
     
     #tk.Label(frangi_frame).pack(pady=0)
     segmentation_tabs.grid(row=3)
@@ -202,16 +208,44 @@ def plot_image():
     view_dropdown.configure(state="normal")
     filters_button.configure(state="normal")
     restore_button.configure(state="normal")
+    
+button_text = ""
+
+def hold_button(button):
+    global button_text
+    button_text = button.cget("text")
+    button.configure(state="disabled", text="Loading...")
+    
+def release_button(button):
+    button.configure(state="normal", text=button_text)
 
 def resample_image(image_data, target_voxel_size):
     current_voxel_sizes = np.array(image_data.header.get_zooms())
     shape = image_data.get_fdata().shape * (current_voxel_sizes/target_voxel_size)
     new_image_data = resize(image_data.get_fdata(), output_shape=shape, mode='constant')
-    print("image reshaped from ", image_data.get_fdata().shape , " to ", new_image_data.shape)
+    text = "image reshaped from ", image_data.get_fdata().shape , " to ", new_image_data.shape
+    print(text)
+    refresh_text(text)
     return new_image_data
 
+def refresh_text(text):
+    def update_text():
+        if not file_selected:
+            default_text="Upload an image to begin"
+        else:
+            default_text="Loaded Image: " + image_name
+        message_label.configure(text=default_text)
+
+    if not file_selected:
+        default_text="Upload an image to begin"
+    else:
+        default_text="Loaded Image: " + image_name
+    message_label.configure(text=text)
+    root.after(5000, update_text)
+    
+
 def add_image():
-    global file_path, nii_3d_image_original, nii_3d_image, file_selected, voxel_size, original_canvas_width, original_canvas_height
+    global file_path, nii_3d_image_original, nii_3d_image, file_selected, voxel_size, original_canvas_width, original_canvas_height, min_voxel_size, image_name
     filters.delete_temp()
     # Get the dimensions of the canvas
     original_canvas_width = canvas_frame.winfo_width()
@@ -238,32 +272,36 @@ def add_image():
                 nii_3d_image = nii_file
                 print("no resample required")
             else:
-                nii_file_resampled = resample_image(nii_file_original, min_voxel_size)
+                nii_file_resampled = filters.resample_image(nii_file_original, min_voxel_size)
                 nii_3d_image = nii_file_resampled
             nii_3d_image_original = nii_3d_image
 
-            target_sigma = 3 ##mm
-            delta_sigma = target_sigma / 10
+            target_sigma = 1.5
+            delta_sigma = target_sigma / 5
             hVar2.set(target_sigma + delta_sigma)
             hVar1.set(target_sigma - delta_sigma)
-
+            noise_size = filters.voxel2mm(filters.calculate_noise(nii_3d_image), voxel_size)
+            avg_intensity = np.mean(noise_size)
+            max_intensity = np.max(noise_size)
+            print('avg and max intensity: ', avg_intensity, max_intensity)
+            print("actual Noise Size in mm: ", noise_size)
             # runs function to update background
             plot_image()
-            restore_original()
+            #restore_original()
             file_selected = True
             root.resizable(True, True)
             print("Image loaded ", nii_3d_image.shape)
+            image_name = os.path.basename(file_path)
+            text="Loaded Image: " + image_name
+            refresh_text(text)
 
         except Exception as e:
             print("Error loading image:", e)
+            refresh_text("Error loading image: " + str(e))
     else:
         print("No file selected")
+        refresh_text("No file selected")
 
-    
-def apply_gaussian_3d():
-        global nii_3d_image
-        nii_3d_image = filters.gaussian3d(nii_3d_image,gaussian_intensity)
-        plot_image()    
 
 def apply_frangi():
     """
@@ -271,35 +309,62 @@ def apply_frangi():
     """
     global nii_3d_image
     
-    if isbasic:
-        # If the user has selected the basic option, apply the Frangi filter with a single scale value
-        sigma = filters.mm2voxel(sigma_val, voxel_size) / 2
-        sigmas = [sigma]
-    else:
-        # If the user has selected the advanced option, apply the Frangi filter with a range of scale values
-        var1 = filters.mm2voxel(hVar1.get(), voxel_size) / 2
-        var2 = filters.mm2voxel(hVar2.get(), voxel_size) / 2
-        sigmas = np.linspace(var1, var2, step_val + 1)
-    
-    # Apply the Frangi filter to the input image
-    nii_3d_image = frangi_tensor.my_frangi_filter(nii_3d_image_original, sigmas, alpha_val, beta_val, isblack)
-    plot_image()
+    hold_button(apply_frangi_button)
+
+    def apply_frangi_thread():
+        global nii_3d_image  # Ensure that we modify the global variable
+        
+        if isbasic:
+            # If the user has selected the basic option, apply the Frangi filter with a single scale value
+            sigma = filters.mm2voxel(sigma_val, voxel_size) / 2
+            sigmas = [sigma]
+        else:
+            # If the user has selected the advanced option, apply the Frangi filter with a range of scale values
+            var1 = filters.mm2voxel(hVar1.get(), voxel_size) / 2
+            var2 = filters.mm2voxel(hVar2.get(), voxel_size) / 2
+            sigmas = np.linspace(var1, var2, step_val + 1)
+        
+        # Apply the Frangi filter to the input image
+        output = frangi_tensor.my_frangi_filter(nii_3d_image_original, sigmas, alpha_val, beta_val, isblack)
+        
+        # Update the global variable with the result
+        nii_3d_image = output
+        release_button(apply_frangi_button)
+
+        # Update the GUI using root.after to ensure it's done in the main thread
+        root.after(0, refresh_text, "Frangi filter applied")
+        root.after(0, plot_image)
+        
+    # Start the filtering operation in a new thread
+    threading.Thread(target=apply_frangi_thread).start()
 
 def save_file():
     global nii_3d_image
     # obtain the data
+    hold_button(save_file_button)
     data = nii_3d_image
+    # Define the percentage of the image dimensions to extract from the corner
+    corner_percentage = 0.05  # 5% of the image dimensions
+
+    # Calculate the size of the corner region
+    corner_size = [int(dim * corner_percentage) for dim in data.shape]
+
+    # Extract the corner sample (assuming the corner is at (0,0,0))
+    corner_sample = data[:corner_size[0], :corner_size[1], :corner_size[2]]
     
     # Open dialog window to save the file
     file_path = filedialog.asksaveasfilename(defaultextension=".nii", filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")])
     
     # If the user cancels, the path will be empty
     if not file_path:
+        release_button(save_file_button)
         return
     
     # Create a NIfTI From the data
-    nii_file = nib.Nifti1Image(data, np.eye(4))  # Reemplaza 'np.eye(4)' con tu transformación afín si es necesario
+    nii_file = nib.Nifti1Image(corner_sample, np.eye(4))  # listo mi rey, guarde el metadata aqui, graciassi es necesario
     nib.save(nii_file, file_path)
+    refresh_text("File saved: " + file_path)
+    release_button(save_file_button)
 
 def change_slice_portion(val):
     global slice_portion
@@ -320,18 +385,22 @@ def change_black_vessels():
         black_vessels_switch.configure(text="Black")
         isblack = True
         print("Black Vessels True")
+        refresh_text("Target: Black vessels")
     else:
         black_vessels_switch.configure(text="White")
         isblack = False
         print("Black Vessels False")
+        refresh_text("Target: White vessels")
 
 def switch_mode(event=None):
     global isbasic
     if isbasic:
         print("Advanced mode")
+        #refresh_text("Advanced mode selected")
         isbasic = False
     else:
         print("Basic mode")
+        #refresh_text("Basic mode selected")
         isbasic = True
 
 def update_scale_range_label(*args):
@@ -354,7 +423,7 @@ def change_beta(val):
 def change_sigma_val(val):
     global sigma_val
     sigma_val = float(val)
-    filters.gaussian_preview(nii_2d_image,sigma_val/2)
+    filters.gaussian_preview(nii_2d_image,filters.mm2voxel(sigma_val, min_voxel_size), root)
     text_val = "Diameter: {:.2f} mm".format(sigma_val)
     diameter_label.configure(text=text_val)
     
@@ -370,6 +439,7 @@ def restore_original():
     gaussian_intensity = 0
     threshold_value = 0
     nii_3d_image = nii_3d_image_original
+    refresh_text("Original image restored")
     plot_image()     
 
 def filters_window():
@@ -391,7 +461,7 @@ def filters_window():
         # Truncate intensity to ensure it's an integer and make it odd
         kernel_size = val
         gaussian_intensity = kernel_size
-        filters.gaussian_preview(nii_2d_image,gaussian_intensity/2)
+        filters.gaussian_preview(nii_2d_image,gaussian_intensity,root)
         text_val = "Gaussian Intensity: {:.1f}".format(gaussian_intensity)
         label_Gaussian.configure(text=text_val)
         refresh_image()
@@ -399,12 +469,14 @@ def filters_window():
     def apply_gaussian_3d():
         global nii_3d_image, gaussian_intensity
         nii_3d_image = filters.gaussian3d(nii_3d_image,gaussian_intensity)
+        refresh_text("Gaussian blur applied")
         plot_image()
     
     def apply_sci_frangi():
         global nii_3d_image
         nii_3d_image = filters.my_frangi_filter(nii_3d_image_original,sigmas, alpha_val, beta_val, isblack)
         plot_image()
+        refresh_text("Scikit Frangi applied")
     
     def cancel_filter():
         plot_image()
@@ -424,6 +496,7 @@ def filters_window():
         global threshold_value, nii_3d_image
         nii_3d_image = filters.thresholding(nii_3d_image,threshold_value)
         plot_image()
+        refresh_text("Threshold applied")
     
     # Toplevel object which will 
     # be treated as a new window
@@ -465,7 +538,7 @@ def filters_window():
     label_Gaussian.pack()
 
     # Gaussian filter slider
-    gaussian_slider = ctk.CTkSlider(master=gaussian_frame, from_=1, to=13 , command=change_gaussian_val, width=120)
+    gaussian_slider = ctk.CTkSlider(master=gaussian_frame, from_=0, to=13 , command=change_gaussian_val, width=120)
     gaussian_slider.set(0)
     gaussian_slider.pack(pady=5)
     
@@ -536,6 +609,12 @@ right_frame.pack(pady=10, padx=10, fill="both", expand=True)
 # frame that contains the canvas tools
 canva_tools_frame = ctk.CTkFrame(right_frame)
 canva_tools_frame.pack(side="top",pady=10, padx=10, fill="x")
+
+messages_frame = ctk.CTkFrame(right_frame, height=20)
+messages_frame.pack(side="bottom",pady=10, padx=10, fill="x")
+message_label = ctk.CTkLabel(messages_frame)
+refresh_text(f"Welcome {getpass.getuser()}")
+message_label.pack()
 
 # the main canvas frame
 canvas_frame = ctk.CTkFrame(right_frame)
@@ -629,13 +708,13 @@ segmentation_tabs = ttk.Notebook(master=left_frame_canvas)
 #basic tab
 basic_tab = ttk.Frame(segmentation_tabs)
 text_sigma_val = "Diameter: {:.2f} mm".format(sigma_val)
-diameter_label = ctk.CTkLabel(basic_tab, text=text_sigma_val)
+diameter_label = ctk.CTkLabel(basic_tab, text=text_sigma_val, bg_color=message_label.cget('bg_color'))
 diameter_label.pack(pady=5, padx=0)
 
-diameter_slider = ctk.CTkSlider(basic_tab, from_=0.0, to=100.0, command=change_sigma_val, width=120)
+diameter_slider = ctk.CTkSlider(basic_tab, from_=0.0, to=10.0, command=change_sigma_val, width=120)
 diameter_slider.set(sigma_val)
-diameter_slider.pack(padx=20, pady=5)
-
+diameter_slider.pack(padx=20, pady=2, fill='x')
+diameter_slider.configure(bg_color=message_label.cget('bg_color'))
 segmentation_tabs.add(basic_tab, text="Basic")
 segmentation_tabs.bind("<<NotebookTabChanged>>", switch_mode)
 
@@ -661,13 +740,13 @@ scale_frame.pack(pady=(0,5))
 # scale step label
 text_val = "Scale Step: {:}".format(step_val)
 step_value_label = ctk.CTkLabel(scale_frame, text=text_val)
-step_value_label.pack(pady=6, padx=0, anchor='w')
+step_value_label.pack(pady=2, padx=0, anchor='w')
 
 # scale step slider
 max_val = 100
 scale_steps_slider = ctk.CTkSlider(master=scale_frame, from_=1, to=max_val,number_of_steps=max_val-1, command=change_scale_step, width=100)
 scale_steps_slider.set(step_val)
-scale_steps_slider.pack(pady=(0, 6), padx=0, anchor='w')
+scale_steps_slider.pack(pady=(0, 2), padx=0, anchor='w')
 
 segmentation_tabs.add(advanced_tab, text="Advanced")
 segmentation_tabs.bind("<<NotebookTabChanged>>", switch_mode)

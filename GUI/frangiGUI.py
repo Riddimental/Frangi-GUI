@@ -217,7 +217,9 @@ def hold_button(button):
     button.configure(state="disabled", text="Loading...")
     
 def release_button(button):
+    global button_text
     button.configure(state="normal", text=button_text)
+    button_text=""
 
 def resample_image(image_data, target_voxel_size):
     current_voxel_sizes = np.array(image_data.header.get_zooms())

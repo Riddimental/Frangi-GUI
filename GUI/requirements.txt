@@ -1,5 +1,4 @@
 matplotlib
-tcl-tk
 customtkinter
 opencv-python
 numpy

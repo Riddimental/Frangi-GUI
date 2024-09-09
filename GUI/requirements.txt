@@ -1,11 +1,11 @@
+matplotlib
+tcl-tk
 customtkinter
+opencv-python
 numpy
 napari[all]
 RangeSlider
 nibabel
-matplotlib
 Pillow
-opencv-python
-virtualenv
 torch
 torchvision

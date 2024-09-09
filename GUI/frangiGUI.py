@@ -250,7 +250,7 @@ def add_image():
     # Get the dimensions of the canvas
     original_canvas_width = canvas_frame.winfo_width()
     original_canvas_height = canvas_frame.winfo_height()
-    file_path = filedialog.askopenfilename(filetypes=[("NIfTI files", "*.gz *.nii *.nii.gz")])
+    file_path = filedialog.askopenfilename(filetypes=[("NIfTI files", "*.gz *.nii")])
     if file_path:
         try:
             # reading file

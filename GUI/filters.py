@@ -72,7 +72,7 @@ def calculate_noise(input):
    # Calculate the standard deviation of the large sample
    std_deviation_corners = np.std(large_sample)
    
-   print(f'Estimated sigma (σ) for the homogeneous region: {std_deviation_corners}')
+   #print(f'Estimated sigma (σ) for the homogeneous region: {std_deviation_corners}')
    return std_deviation_corners
 
 def intensity_rescale(image, new_min=0, new_max=1):

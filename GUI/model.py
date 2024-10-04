@@ -110,7 +110,7 @@ def apply_frangi_filter(nib_file, params): #nib_file is a .nii file loaded from 
          print("Image resampled")
 
    # Apply a transform to ensure the parameters are within the correct range
-   scale = torch.sigmoid(params[0]) * 4  # Scale in the range [0, 4] (in mm, a later conversion changes mm to voxels depending on the image proportions)
+   scale = torch.sigmoid(params[0])  # Scale in the range [0, 4] (in mm, a later conversion changes mm to voxels depending on the image proportions)
    beta1 = torch.sigmoid(params[1])      # Beta1 in the range [0, 1]
    beta2 = torch.sigmoid(params[2])      # Beta2 in the range [0, 1]
    blackVessels = torch.sigmoid(params[3]) > 0.5  # Boolean based on the threshold value

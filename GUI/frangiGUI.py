@@ -38,9 +38,9 @@ root.title("Frangi MRI")
 root.minsize(window_width, window_height)
 
 hVar1 = tk.DoubleVar()
-hVar1.set(0.1)# left handle variable
+hVar1.set(0.0)# left handle variable
 hVar2 = tk.DoubleVar()
-hVar2.set(2.0)# right handle variable
+hVar2.set(10.0)# right handle variable
 
 # Ruta del directorio "temp"
 temp_directory = "temp"
@@ -278,24 +278,20 @@ def add_image():
                 nii_3d_image = nii_file_resampled
             nii_3d_image_original = nii_3d_image
 
-            target_sigma = 1.5
-            delta_sigma = target_sigma / 5
-            hVar2.set(target_sigma + delta_sigma)
-            hVar1.set(target_sigma - delta_sigma)
-            noise_size = filters.voxel2mm(filters.calculate_noise(nii_3d_image), voxel_size)
-            avg_intensity = np.mean(noise_size)
-            max_intensity = np.max(noise_size)
-            print('avg and max intensity: ', avg_intensity, max_intensity)
-            print("actual Noise Size in mm: ", noise_size)
+            noise_size = filters.voxel2mm(filters.calculate_noise(nii_3d_image), voxel_size) * 2
+            # Apply correction factor to calculated sigma based on the paper's research
+            corrected_calculated_sigma = noise_size - (0.223 * noise_size)
+            # print("Aproximate Noise Size: ", noise_size," mm")
+            print("Calculated Noise Sigma: ", corrected_calculated_sigma)
             # runs function to update background
             plot_image()
             #restore_original()
             file_selected = True
             root.resizable(True, True)
-            print("Image loaded ", nii_3d_image.shape)
-            image_name = os.path.basename(file_path)
             text="Loaded Image: " + image_name
             refresh_text(text)
+            print("Image loaded, Dim: ", nii_3d_image.shape)
+            image_name = os.path.basename(file_path)
 
         except Exception as e:
             print("Error loading image:", e)
@@ -327,7 +323,8 @@ def apply_frangi():
             sigmas = np.linspace(var1, var2, step_val + 1)
         
         # Apply the Frangi filter to the input image
-        output = frangi_tensor.my_frangi_filter(nii_3d_image_original, sigmas, alpha_val, beta_val, isblack)
+        #output = frangi_tensor.my_frangi_filter(nii_3d_image_original, sigmas, alpha_val, beta_val, isblack)
+        output = frangi_tensor.my_frangi_filter_parallel(nii_3d_image_original, sigmas, alpha_val, beta_val, isblack)
         
         # Update the global variable with the result
         nii_3d_image = output
@@ -345,14 +342,14 @@ def save_file():
     # obtain the data
     hold_button(save_file_button)
     data = nii_3d_image
-    # Define the percentage of the image dimensions to extract from the corner
+    '''# Define the percentage of the image dimensions to extract from the corner
     corner_percentage = 0.05  # 5% of the image dimensions
 
     # Calculate the size of the corner region
     corner_size = [int(dim * corner_percentage) for dim in data.shape]
 
     # Extract the corner sample (assuming the corner is at (0,0,0))
-    corner_sample = data[:corner_size[0], :corner_size[1], :corner_size[2]]
+    corner_sample = data[:corner_size[0], :corner_size[1], :corner_size[2]]'''
     
     # Open dialog window to save the file
     file_path = filedialog.asksaveasfilename(defaultextension=".nii", filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")])
@@ -363,8 +360,29 @@ def save_file():
         return
     
     # Create a NIfTI From the data
-    nii_file = nib.Nifti1Image(corner_sample, np.eye(4))  # listo mi rey, guarde el metadata aqui, graciassi es necesario
+    nii_file = nib.Nifti1Image(data, np.eye(4))  # listo mi rey, guarde el metadata aqui, graciassi es necesario
     nib.save(nii_file, file_path)
+    
+    '''
+    # Function to add Rician noise to an image
+    def add_rician_noise(image, sigma):
+        noise = np.random.normal(loc=0, scale=sigma, size=image.shape)
+        noisy_image = np.sqrt(image**2 + noise**2)
+        return noisy_image
+
+    # Function to create a noisy image with Rician noise
+    def create_noisy_image(base_image, sigma):
+        noisy_image = add_rician_noise(base_image, sigma)
+        return noisy_image
+    
+    sigmas = np.linspace(0, 1 , 11)
+    
+    for i, sigma in enumerate(sigmas):
+        noisy_image_1 = create_noisy_image(data, sigma)
+        nifti_img_1 = nib.Nifti1Image(noisy_image_1, affine=np.eye(4))
+        nib.save(nifti_img_1, f'ellipsoids_with_noise_sigma_{sigma:.1f}.nii.gz')
+    '''
+    
     refresh_text("File saved: " + file_path)
     release_button(save_file_button)
 
@@ -713,7 +731,7 @@ text_sigma_val = "Diameter: {:.2f} mm".format(sigma_val)
 diameter_label = ctk.CTkLabel(basic_tab, text=text_sigma_val, bg_color=message_label.cget('bg_color'))
 diameter_label.pack(pady=5, padx=0)
 
-diameter_slider = ctk.CTkSlider(basic_tab, from_=0.0, to=10.0, command=change_sigma_val, width=120)
+diameter_slider = ctk.CTkSlider(basic_tab, from_=0.0, to=40.0, command=change_sigma_val, width=120)
 diameter_slider.set(sigma_val)
 diameter_slider.pack(padx=20, pady=2, fill='x')
 diameter_slider.configure(bg_color=message_label.cget('bg_color'))
@@ -729,7 +747,7 @@ scale_range = ctk.CTkLabel(advanced_tab, text=text_val)
 scale_range.pack(pady=(5,0))
 
 # scale range slider
-scale_range_slider = RangeSliderH(advanced_tab, [hVar1, hVar2], Width=130, Height=30, padX=5, min_val=0.001, bgColor=frangi_frame.cget('bg'), max_val=100, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
+scale_range_slider = RangeSliderH(advanced_tab, [hVar1, hVar2], Width=130, Height=30, padX=5, min_val=0.0, bgColor=frangi_frame.cget('bg'), max_val=100, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
 scale_range_slider.pack(padx=5, pady=(0,2))
 
 hVar1.trace_add("write", update_scale_range_label)

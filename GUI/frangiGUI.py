@@ -383,6 +383,7 @@ def save_file():
         nib.save(nifti_img_1, f'ellipsoids_with_noise_sigma_{sigma:.1f}.nii.gz')
     '''
     
+    
     refresh_text("File saved: " + file_path)
     release_button(save_file_button)
 
@@ -731,7 +732,7 @@ text_sigma_val = "Diameter: {:.2f} mm".format(sigma_val)
 diameter_label = ctk.CTkLabel(basic_tab, text=text_sigma_val, bg_color=message_label.cget('bg_color'))
 diameter_label.pack(pady=5, padx=0)
 
-diameter_slider = ctk.CTkSlider(basic_tab, from_=0.0, to=40.0, command=change_sigma_val, width=120)
+diameter_slider = ctk.CTkSlider(basic_tab, from_=0.0, to=15.0, command=change_sigma_val, width=120)
 diameter_slider.set(sigma_val)
 diameter_slider.pack(padx=20, pady=2, fill='x')
 diameter_slider.configure(bg_color=message_label.cget('bg_color'))
@@ -747,7 +748,7 @@ scale_range = ctk.CTkLabel(advanced_tab, text=text_val)
 scale_range.pack(pady=(5,0))
 
 # scale range slider
-scale_range_slider = RangeSliderH(advanced_tab, [hVar1, hVar2], Width=130, Height=30, padX=5, min_val=0.0, bgColor=frangi_frame.cget('bg'), max_val=100, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
+scale_range_slider = RangeSliderH(advanced_tab, [hVar1, hVar2], Width=130, Height=30, padX=5, min_val=0.0, bgColor=frangi_frame.cget('bg'), max_val=15.0, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
 scale_range_slider.pack(padx=5, pady=(0,2))
 
 hVar1.trace_add("write", update_scale_range_label)

@@ -119,7 +119,7 @@ def thresholding2d(data, threshold):
    plt.imsave("temp/plot.jpeg", transformed_image, cmap = 'gray')
 
 def gaussian_preview(data, intensity, root=None):
-   data = ndi.gaussian_filter(data, intensity)
+   data = ndi.gaussian_filter(data, intensity, mode='constant')
    if(root):
       root.after(15, plt.imsave("temp/plot.jpeg", data, cmap='gray'))
    else:
@@ -130,7 +130,7 @@ def gaussian3d(data3D, intensity):
    kernel_size = max(1, math.trunc(intensity))
    if kernel_size % 2 == 0:
       kernel_size += 1  # Make it odd if it's even
-   data = ndi.gaussian_filter(data3D, intensity/3)
+   data = ndi.gaussian_filter(data3D, intensity/3, mode='constant')
    return data
 
 def sci_frangi(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cval=1):

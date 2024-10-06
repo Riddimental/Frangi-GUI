@@ -52,8 +52,8 @@ if not os.path.exists(temp_directory):
 
 # Defining global variables
 max_value = 0
-alpha_val = 0.5
-beta_val=0.5
+alpha_val = 0.2
+beta_val=0.8
 step_val = 1
 sigmas = []
 sigma_val = 1.5
@@ -323,8 +323,9 @@ def apply_frangi():
             sigmas = np.linspace(var1, var2, step_val + 1)
         
         # Apply the Frangi filter to the input image
-        #output = frangi_tensor.my_frangi_filter(nii_3d_image_original, sigmas, alpha_val, beta_val, isblack)
-        output = frangi_tensor.my_frangi_filter_parallel(nii_3d_image_original, sigmas, alpha_val, beta_val, isblack)
+        mod = nii_3d_image_original.copy()
+        mod[:,:,nii_3d_image_original.shape[2]-10:] = 1
+        output = frangi_tensor.my_frangi_filter_parallel(mod, sigmas, alpha_val, beta_val, isblack)
         
         # Update the global variable with the result
         nii_3d_image = output
@@ -507,9 +508,9 @@ def filters_window():
 
     def change_threshold_val(val):
         global threshold_value, nii_2d_image
-        threshold_value = int(val)
+        threshold_value = float(val)
         filters.thresholding2d(nii_2d_image, threshold_value)
-        text_val = "Threshold: " + str(threshold_value)
+        text_val = "Threshold: {:.2f}".format(threshold_value)
         label_Threshold.configure(text=text_val)
         refresh_image()
         
@@ -559,7 +560,7 @@ def filters_window():
     label_Gaussian.pack()
 
     # Gaussian filter slider
-    gaussian_slider = ctk.CTkSlider(master=gaussian_frame, from_=0, to=13 , command=change_gaussian_val, width=120)
+    gaussian_slider = ctk.CTkSlider(master=gaussian_frame, from_=0, to=100 , command=change_gaussian_val, width=120)
     gaussian_slider.set(0)
     gaussian_slider.pack(pady=5)
     
@@ -594,7 +595,7 @@ def filters_window():
     label_Threshold.pack()
 
     # Threshold  slider
-    threshold_slider = ctk.CTkSlider(master=thresholding_frame, from_=0, to=max_value, command=change_threshold_val, width=120)
+    threshold_slider = ctk.CTkSlider(master=thresholding_frame, from_=0, to=max_value, number_of_steps=30, command=change_threshold_val, width=120)
     threshold_slider.set(0)
     threshold_slider.pack(pady=5)
     
@@ -732,7 +733,7 @@ text_sigma_val = "Diameter: {:.2f} mm".format(sigma_val)
 diameter_label = ctk.CTkLabel(basic_tab, text=text_sigma_val, bg_color=message_label.cget('bg_color'))
 diameter_label.pack(pady=5, padx=0)
 
-diameter_slider = ctk.CTkSlider(basic_tab, from_=0.0, to=15.0, command=change_sigma_val, width=120)
+diameter_slider = ctk.CTkSlider(basic_tab, from_=0.0, to=30.0, command=change_sigma_val, width=120)
 diameter_slider.set(sigma_val)
 diameter_slider.pack(padx=20, pady=2, fill='x')
 diameter_slider.configure(bg_color=message_label.cget('bg_color'))
@@ -748,7 +749,7 @@ scale_range = ctk.CTkLabel(advanced_tab, text=text_val)
 scale_range.pack(pady=(5,0))
 
 # scale range slider
-scale_range_slider = RangeSliderH(advanced_tab, [hVar1, hVar2], Width=130, Height=30, padX=5, min_val=0.0, bgColor=frangi_frame.cget('bg'), max_val=15.0, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
+scale_range_slider = RangeSliderH(advanced_tab, [hVar1, hVar2], Width=130, Height=30, padX=5, min_val=0.0, bgColor=frangi_frame.cget('bg'), max_val=13.0, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
 scale_range_slider.pack(padx=5, pady=(0,2))
 
 hVar1.trace_add("write", update_scale_range_label)
@@ -845,10 +846,10 @@ c_icon_right_image.thumbnail((40, 40))
 c_icon_left = ImageTk.PhotoImage(c_icon_left_image)
 c_icon_right = ImageTk.PhotoImage(c_icon_right_image)
 
-alphaicon_label_left = tk.Label(frangi_frame, image=alphaicon_left)
+alphaicon_label_left = tk.Label(frangi_frame, image=alphaicon_right)
 alphaicon_label_left.grid(row=2, column=0, padx=10, sticky='s')  
 
-alphaicon_label_right = tk.Label(frangi_frame, image=alphaicon_right)
+alphaicon_label_right = tk.Label(frangi_frame, image=alphaicon_left)
 alphaicon_label_right.grid(row=2, column=2, padx=10, sticky='s')  
 
 betaicon_label_left = tk.Label(frangi_frame, image=betaicon_left)

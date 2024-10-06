@@ -12,7 +12,7 @@ def apply_gaussian_blur_3d(image: torch.Tensor, sigma: float) -> torch.Tensor:
    image = image.cpu().numpy()
    
    # Apply Gaussian filter
-   blurred_image = ndi.gaussian_filter(image, sigma=sigma, mode='nearest')
+   blurred_image = ndi.gaussian_filter(image, sigma=sigma, mode='constant')
    
    # Convert back to torch tensor
    blurred_image = torch.tensor(blurred_image, dtype=torch.float32, device=image.device)
@@ -86,21 +86,17 @@ def compute_hessian_return_eigvals(image: torch.Tensor, sigma: float = 1) -> tor
 data_list = []
 def process_scale(tensor_image, sigma, alpha, beta):
    global data_list
-   text = f'Working on scale: {sigma.item()}'
-   print(text)
+   text = f'Scale {sigma.item()} finished'
    eigenvalues = compute_hessian_return_eigvals(tensor_image, sigma=sigma)
    output = compute_vesselness(eigenvalues, alpha, beta).real
-   
    avg_intensity_B = torch.mean(output[:,:,:20])
-   #avg_intensity_F = torch.mean(output[(output.shape[0]//2)-2:(output.shape[0]//2) + 2,:, (output.shape[2]//2)-2:(output.shape[2]//2) + 2])
-   #avg_intensity_F = torch.mean(output[output.shape[0]//2,30:170, output.shape[2]//2])
-   avg_intensity_F_1 = torch.mean(output[50,(output.shape[1]//2) - 4: (output.shape[1]//2) + 4, output.shape[2]//2])
-   avg_intensity_F_2 = torch.mean(output[200,(output.shape[1]//2) - 4: (output.shape[1]//2) + 4, output.shape[2]//2])
-   avg_intensity_F_3 = torch.mean(output[350,(output.shape[1]//2) - 4: (output.shape[1]//2) + 4, output.shape[2]//2])
-   #print(f'Average intensity of background is: {avg_intensity_B.item()}')
+   rangey = 8
+   avg_intensity_F_1 = torch.mean(output[75,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
+   avg_intensity_F_2 = torch.mean(output[200,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
+   avg_intensity_F_3 = torch.mean(output[325,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
+   
    data_list.append([sigma.item(),avg_intensity_B.item(),avg_intensity_F_1.item(),avg_intensity_F_2.item(),avg_intensity_F_3.item()])
-   #print(f'Average intensity of foreground is: {avg_intensity_F.item()}')
-   #print('=======================================================================')
+   print(text)
    return output
 
 def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha: float = 1, beta: float = 0.5, black_vessels: bool = True) -> np.ndarray:

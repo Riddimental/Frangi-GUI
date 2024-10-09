@@ -84,22 +84,32 @@ def compute_hessian_return_eigvals(image: torch.Tensor, sigma: float = 1) -> tor
    return eig_vals
 
 data_list = []
-def process_scale(tensor_image, sigma, alpha, beta):
+def process_scale(tensor_image, sigma, alpha, beta, mask):
    global data_list
    text = f'Scale {sigma.item()} finished'
    eigenvalues = compute_hessian_return_eigvals(tensor_image, sigma=sigma)
    output = compute_vesselness(eigenvalues, alpha, beta).real
-   avg_intensity_B = torch.mean(output[:,:,:20])
    rangey = 8
-   avg_intensity_F_1 = torch.mean(output[75,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
-   avg_intensity_F_2 = torch.mean(output[200,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
-   avg_intensity_F_3 = torch.mean(output[325,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
+   mask1 = mask.copy()
+   mask2 = mask.copy()
+   mask3 = mask.copy()
+   mask1[100:,:,:] = 0
+   mask2[:100,:,:] = 0
+   mask2[200:,:,:] = 0
+   mask3[:200,:,:] = 0
+   mask3[300:,:,:] = 0
+   avg_intensity_B_1 = torch.mean(output[mask1 ==1])
+   avg_intensity_B_2 = torch.mean(output[mask2 ==1])
+   avg_intensity_B_3 = torch.mean(output[mask3 ==1])
+   avg_intensity_F_1 = torch.mean(output[50,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
+   avg_intensity_F_2 = torch.mean(output[150,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
+   avg_intensity_F_3 = torch.mean(output[250,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
    
-   data_list.append([sigma.item(),avg_intensity_B.item(),avg_intensity_F_1.item(),avg_intensity_F_2.item(),avg_intensity_F_3.item()])
+   data_list.append([sigma.item(),avg_intensity_B_1.item(),avg_intensity_B_2.item(),avg_intensity_B_3.item(),avg_intensity_F_1.item(),avg_intensity_F_2.item(),avg_intensity_F_3.item()])
    print(text)
    return output
 
-def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha: float = 1, beta: float = 0.5, black_vessels: bool = True) -> np.ndarray:
+def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha: float = 1, beta: float = 0.5, black_vessels: bool = True, mask: np.ndarray = None) -> np.ndarray:
    global data_list
    tensor_image = torch.tensor(input_image, dtype=torch.float64)  # Ensure the image is float64
    tensor_image /= tensor_image.max()  # Normalize the image
@@ -115,7 +125,7 @@ def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha
 
    # Use ThreadPoolExecutor for parallel execution
    with ThreadPoolExecutor() as executor:
-      futures = [executor.submit(process_scale, tensor_image, sigma, alpha, beta) for sigma in sigmas]
+      futures = [executor.submit(process_scale, tensor_image, sigma, alpha, beta, mask) for sigma in sigmas]
       
       # Collect the results as they complete
       for future in futures:
@@ -130,10 +140,12 @@ def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha
    print(f"Frangi filter applied in {duration:.4f} seconds.")
    # First, sort the data_list based on the first element (scale) of each triplet
    data_list.sort(key=lambda x: x[0])
-   scales, avg_B, avg_F_1, avg_F_2, avg_F_3 = map(list, zip(*data_list))
+   scales, avg_B_1, avg_B_2, avg_B_3, avg_F_1, avg_F_2, avg_F_3 = map(list, zip(*data_list))
    data_list = []
    print('scales =',scales)
-   print('avg_B =',avg_B)
+   print('avg_B_1 =',avg_B_1)
+   print('avg_B_2 =',avg_B_2)
+   print('avg_B_3 =',avg_B_3)
    print('avg_F_1 =',avg_F_1)
    print('avg_F_2 =',avg_F_2)
    print('avg_F_3 =',avg_F_3)

@@ -1,18 +1,10 @@
 import math
-import cv2
-import time
-import nibabel as nib
-#np.set_printoptions(threshold=sys.maxsize)
 import matplotlib.pyplot as plt
-from PIL import Image
 import os
 import shutil
-from itertools import product
 import numpy as np
 import scipy.ndimage as ndi
 from skimage import filters
-from scipy.linalg import eigvals, norm
-from itertools import combinations_with_replacement
 from skimage.transform import resize
 
 def delete_temp():

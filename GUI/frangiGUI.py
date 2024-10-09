@@ -10,7 +10,7 @@ import tkinter as tk
 import nibabel as nib
 import matplotlib.pyplot as plt
 import filters
-import frangi_tensor
+import tensor_frangi
 from tkinter import Toplevel, filedialog, ttk
 from PIL import Image, ImageTk
 from RangeSlider.RangeSlider import RangeSliderH
@@ -76,6 +76,8 @@ view_mode = ctk.StringVar(value="Axial")
 selection_image = Image.new("RGB",(200,200),(0,0,0))
 
 file_selected = False
+
+mask = []
 
 # Make the window not resizable until file is selected
 #root.resizable(False, False)
@@ -205,7 +207,6 @@ def plot_image():
     save_file_button.pack(pady=5)
     slice_slider.configure(state="normal", to=max_slice)
     picture_canvas.pack(anchor="center", expand=True)
-    view_dropdown.configure(state="normal")
     filters_button.configure(state="normal")
     restore_button.configure(state="normal")
     
@@ -284,6 +285,7 @@ def add_image():
             # print("Aproximate Noise Size: ", noise_size," mm")
             print("Calculated Noise Sigma: ", corrected_calculated_sigma)
             # runs function to update background
+            view_segmented_button.configure(state="normal")
             plot_image()
             #restore_original()
             file_selected = True
@@ -325,7 +327,7 @@ def apply_frangi():
         # Apply the Frangi filter to the input image
         mod = nii_3d_image_original.copy()
         mod[:,:,nii_3d_image_original.shape[2]-10:] = 1
-        output = frangi_tensor.my_frangi_filter_parallel(mod, sigmas, alpha_val, beta_val, isblack)
+        output = tensor_frangi.my_frangi_filter_parallel(mod, sigmas, alpha_val, beta_val, isblack, mask)
         
         # Update the global variable with the result
         nii_3d_image = output
@@ -387,6 +389,35 @@ def save_file():
     
     refresh_text("File saved: " + file_path)
     release_button(save_file_button)
+
+def create_noise():
+    data = nii_3d_image_original
+    
+    # Function to add Rician noise to an image
+    def add_rician_noise(image, sigma):
+        noise = np.random.normal(loc=0, scale=sigma, size=image.shape)
+        noisy_image = np.sqrt(image**2 + noise**2)
+        return noisy_image
+
+    # Function to create a noisy image with Rician noise
+    def create_noisy_image(base_image, sigma):
+        noisy_image = add_rician_noise(base_image, sigma)
+        return noisy_image
+    
+    sigmas = np.linspace(0, 1 , 11)
+    
+    for i, sigma in enumerate(sigmas):
+        noisy_image_1 = create_noisy_image(data, sigma)
+        nifti_img_1 = nib.Nifti1Image(noisy_image_1, affine=np.eye(4))
+        nib.save(nifti_img_1, f'ellipsoids_with_noise_sigma_{sigma:.1f}.nii.gz')
+        
+    refresh_text("Noise created")
+def save_mask():
+    global mask
+    hold_button(save_file_button)
+    mask = nii_3d_image_original
+    release_button(save_file_button)
+    refresh_text("Mask saved")
 
 def change_slice_portion(val):
     global slice_portion
@@ -664,26 +695,33 @@ filters_button.pack(pady=5)
 
 
 view_frame = tk.Frame(canva_tools_frame)
-view_frame.grid(row=0,column=1,pady=10)
+view_frame.grid(row=0, column=1, pady=10, padx = 10, sticky="ew")
 
-# Define the options for the dropdown
-view_options = ["Axial", "Coronal", "Sagittal"]
+# Define the options for the segmented button
+view_options = ["Sagittal", "Coronal", "Axial"]
 
-def handle_dropdown_selection(selection):
+def handle_segmented_button_selection(selection):
     view_mode.set(selection)
-    plot_image()    
+    plot_image()
 
-# view mode label
+# View mode label
 title_label = ctk.CTkLabel(view_frame, text="View Mode:")
-title_label.grid(row=0, padx=10, sticky="s")
+title_label.pack(padx=10)
 
-# Create the custom dropdown
-view_dropdown = ctk.CTkComboBox(master=view_frame, variable=view_mode, values=view_options, command=handle_dropdown_selection, state="disabled")
-view_dropdown.grid(row=1, pady=10)
+# Create the segmented button
+view_segmented_button = ctk.CTkSegmentedButton(
+    master=view_frame,
+    state="disabled",
+    values=view_options,
+    command=handle_segmented_button_selection
+)
+view_segmented_button.pack(padx=10, fill="x", expand=True)
+# Set "Axial" as the default selection
+view_segmented_button.set("Axial")
 
 # slice frame
 slice_frame = tk.Frame(canva_tools_frame)
-slice_frame.grid(row=0,column=2,pady=5)
+slice_frame.grid(row=0,column=2,pady=5, sticky="ew")
 
 # Label for the slider
 text_val = "Slice: " + str(slice_portion)
@@ -695,7 +733,7 @@ max_slice = 200
 # slider
 slice_slider = ctk.CTkSlider(master=slice_frame, from_=1, to=max_slice,state="disabled", command=change_slice_portion, width=120)
 slice_slider.set(slice_portion)
-slice_slider.pack( padx=10)
+slice_slider.pack(padx=10, fill="x", expand=True)
 
 
 
@@ -868,7 +906,9 @@ apply_frangi_button = ctk.CTkButton(file_tools_frame,text="Apply Frangi",command
 view_3D_button = ctk.CTkButton(file_tools_frame,text="3D View",command=open_napari)
 
 # Process image segmentation button
-save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_file)
+#save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_file)
+save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_mask)
+#save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=create_noise)
 
 root.bind("<Configure>", on_window_resize)
 

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import my_dataset
-import frangi_tensor
+import tensor_frangi
 import filters
 import numpy as np
 from skimage.transform import resize
@@ -116,7 +116,7 @@ def apply_frangi_filter(nib_file, params): #nib_file is a .nii file loaded from 
    blackVessels = torch.sigmoid(params[3]) > 0.5  # Boolean based on the threshold value
 
    # Apply the Frangi filter with these parameters
-   filtered_image = frangi_tensor.my_frangi_filter(image_data, filters.mm2voxel(scale.item(), voxel_size), beta1.item(), beta2.item(), blackVessels.item())
+   filtered_image = tensor_frangi.my_frangi_filter(image_data, filters.mm2voxel(scale.item(), voxel_size), beta1.item(), beta2.item(), blackVessels.item())
    
    return filtered_image
 

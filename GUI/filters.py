@@ -7,6 +7,7 @@ import scipy.ndimage as ndi
 from skimage import filters
 from skimage.transform import resize
 
+
 def delete_temp():
    # Delete the contents of the temp folder
    folder_path = "temp"
@@ -40,32 +41,43 @@ def mm2voxel(mm, voxel_size):
    return num_voxels #returns the diameter
 
 def voxel2mm(num_voxels, voxel_size):
-    mm = num_voxels * voxel_size
-    #print("for a voxel size of ",voxel_size," cubic mm, ",num_voxels, " voxels is equivalent to ",mm," mm")
-    return mm  # returns the diameter in mm
+   mm = num_voxels * voxel_size
+   #print("for a voxel size of ",voxel_size," cubic mm, ",num_voxels, " voxels is equivalent to ",mm," mm")
+   return mm  # returns the diameter in mm
 
-def calculate_noise(input):
-   img_data = input
-   corner_size = [int(dim * 0.05) for dim in img_data.shape]
-   corners = [
-      img_data[:corner_size[0], :corner_size[1], :corner_size[2]], # (0,0,0)
-      img_data[-corner_size[0]:, :corner_size[1], :corner_size[2]], # (end,0,0)
-      img_data[:corner_size[0], -corner_size[1]:, :corner_size[2]], # (0,end,0)
-      img_data[:corner_size[0], :corner_size[1], -corner_size[2]:], # (0,0,end)
-      img_data[-corner_size[0]:, -corner_size[1]:, :corner_size[2]], # (end,end,0)
-      img_data[-corner_size[0]:, :corner_size[1], -corner_size[2]:], # (end,0,end)
-      img_data[:corner_size[0], -corner_size[1]:, -corner_size[2]:], # (0,end,end)
-      img_data[-corner_size[0]:, -corner_size[1]:, -corner_size[2]:], # (end,end,end)
-   ]
-
-   # Combine all the corner samples into one large sample
-   large_sample = np.concatenate([corner.flatten() for corner in corners])
-
-   # Calculate the standard deviation of the large sample
-   std_deviation_corners = np.std(large_sample)
+def calculate_noise(input_image):
+   img_data = input_image
+   # Ajustar el tamaño del filtro según las dimensiones de la imagen
+   filter_size = max(3, min(img_data.shape) // 100)  # Ejemplo dinámico: un tamaño base de 3, ajustado por la escala de la imagen
    
-   #print(f'Estimated sigma (σ) for the homogeneous region: {std_deviation_corners}')
-   return std_deviation_corners
+   # Aplicar el filtro de mediana
+   smooth_image = ndi.median_filter(img_data, size=filter_size)
+   
+   # Resto del cálculo es igual
+   residual_noise = img_data - smooth_image
+   
+   corner_size = [int(dim * 0.05) for dim in img_data.shape]
+   
+   corners = [
+   residual_noise[:corner_size[0], :corner_size[1], :corner_size[2]],   # (0,0,0)
+   residual_noise[-corner_size[0]:, :corner_size[1], :corner_size[2]],  # (end,0,0)
+   residual_noise[:corner_size[0], -corner_size[1]:, :corner_size[2]],  # (0,end,0)
+   residual_noise[:corner_size[0], :corner_size[1], -corner_size[2]:],  # (0,0,end)
+   residual_noise[-corner_size[0]:, -corner_size[1]:, :corner_size[2]], # (end,end,0)
+   residual_noise[-corner_size[0]:, :corner_size[1], -corner_size[2]:], # (end,0,end)
+   residual_noise[:corner_size[0], -corner_size[1]:, -corner_size[2]:], # (0,end,end)
+   residual_noise[-corner_size[0]:, -corner_size[1]:, -corner_size[2]:], # (end,end,end)
+   ]
+   
+   # Combinar todas las muestras de las esquinas en una muestra grande
+   large_sample = np.concatenate([corner.flatten() for corner in corners])
+   
+   std_deviation_noise = np.std(large_sample)   
+
+   scaled_sigma = std_deviation_noise
+   
+   return scaled_sigma
+
 
 def intensity_rescale(image, new_min=0, new_max=1):
    """

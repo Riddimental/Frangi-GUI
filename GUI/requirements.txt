@@ -8,3 +8,4 @@ nibabel
 Pillow
 torch
 torchvision
+pygame

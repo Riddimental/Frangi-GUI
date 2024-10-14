@@ -9,6 +9,7 @@ import numpy as np
 import tkinter as tk
 import nibabel as nib
 import matplotlib.pyplot as plt
+import torch
 import filters
 import tensor_frangi
 from tkinter import Toplevel, filedialog, ttk
@@ -17,8 +18,22 @@ from RangeSlider.RangeSlider import RangeSliderH
 import napari
 from scipy.ndimage import zoom
 from skimage.transform import resize
+from pygame import mixer
 
 root = ctk.CTk()
+
+mixer.init()
+mixer.music.load('sounds/startup.mp3')
+mixer.music.play()
+# Function to show the window on top
+def show_on_top():
+    root.attributes("-topmost", True)  # Bring to the top
+    root.update()  # Ensure the window is shown immediately
+    root.after(500, lambda: root.attributes("-topmost", False))  # Remove 'always on top' after 0.5 seconds
+
+# Example usage in your code:
+show_on_top()  # Bring it to the top when shown
+
 
 # Window dimensions and centering
 window_width = 850
@@ -195,7 +210,7 @@ def plot_image():
     
     plt.imsave("temp/plot.jpeg", nii_2d_image, cmap='gray')
     #plt.close()
-    root.after(15, refresh_image())
+    root.after(5, refresh_image())
     
     
     #tk.Label(frangi_frame).pack(pady=0)
@@ -246,6 +261,12 @@ def refresh_text(text):
     message_label.configure(text=text)
     root.after(5000, update_text)
     
+def show_noise():
+    noise_size = filters.calculate_noise(nii_3d_image) * 2
+    # Apply correction factor to calculated sigma based on the paper's research
+    corrected_calculated_sigma = noise_size - (0.223 * noise_size)
+    # print("Aproximate Noise Size: ", noise_size," mm")
+    print(f"Calculated Noise Sigma for {image_name}: ", corrected_calculated_sigma)
 
 def add_image():
     global file_path, nii_3d_image_original, nii_3d_image, file_selected, voxel_size, original_canvas_width, original_canvas_height, min_voxel_size, image_name
@@ -279,14 +300,10 @@ def add_image():
                 nii_3d_image = nii_file_resampled
             nii_3d_image_original = nii_3d_image
 
-            noise_size = filters.voxel2mm(filters.calculate_noise(nii_3d_image), voxel_size) * 2
-            # Apply correction factor to calculated sigma based on the paper's research
-            corrected_calculated_sigma = noise_size - (0.223 * noise_size)
-            # print("Aproximate Noise Size: ", noise_size," mm")
-            print("Calculated Noise Sigma: ", corrected_calculated_sigma)
-            # runs function to update background
-            view_segmented_button.configure(state="normal")
             plot_image()
+            # Run show_noise in the background
+            threading.Thread(target=show_noise).start()
+            view_segmented_button.configure(state="normal")
             #restore_original()
             file_selected = True
             root.resizable(True, True)
@@ -327,14 +344,20 @@ def apply_frangi():
         # Apply the Frangi filter to the input image
         mod = nii_3d_image_original.copy()
         mod[:,:,nii_3d_image_original.shape[2]-10:] = 1
-        output = tensor_frangi.my_frangi_filter_parallel(mod, sigmas, alpha_val, beta_val, isblack, mask)
+        try:
+            output = tensor_frangi.my_frangi_filter_parallel(mod, sigmas, alpha_val, beta_val, isblack, mask)
+            # Update the global variable with the result
+            nii_3d_image = output
+            release_button(apply_frangi_button)
+            root.after(0, refresh_text, "Frangi filter applied")
+        except Exception as error:
+            print("Error applying Frangi filter:", error)
+            refresh_text("Error applying Frangi filter")
+            release_button(apply_frangi_button)
+            root.after(0, refresh_text, "Frangi filter not applied")
         
-        # Update the global variable with the result
-        nii_3d_image = output
-        release_button(apply_frangi_button)
 
         # Update the GUI using root.after to ensure it's done in the main thread
-        root.after(0, refresh_text, "Frangi filter applied")
         root.after(0, plot_image)
         
     # Start the filtering operation in a new thread
@@ -690,7 +713,7 @@ restore_button = ctk.CTkButton(tools_button_frame, state="disabled", text="Resto
 restore_button.pack(pady=5)
 
 # Filters button
-filters_button = ctk.CTkButton(tools_button_frame, state="disabled", text="More Filters", command=filters_window)
+filters_button = ctk.CTkButton(tools_button_frame, state="disabled", text="More Options", command=filters_window)
 filters_button.pack(pady=5)
 
 
@@ -787,7 +810,7 @@ scale_range = ctk.CTkLabel(advanced_tab, text=text_val)
 scale_range.pack(pady=(5,0))
 
 # scale range slider
-scale_range_slider = RangeSliderH(advanced_tab, [hVar1, hVar2], Width=130, Height=30, padX=5, min_val=0.0, bgColor=frangi_frame.cget('bg'), max_val=13.0, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
+scale_range_slider = RangeSliderH(advanced_tab, [hVar1, hVar2], Width=130, Height=30, padX=5, min_val=0.0, bgColor=frangi_frame.cget('bg'), max_val=20.0, show_value=False, digit_precision='.1f', line_s_color='white', font_color='white',font_size=1, line_color='gray',bar_color_inner=frangi_frame.cget('bg'), bar_color_outer='gray')
 scale_range_slider.pack(padx=5, pady=(0,2))
 
 hVar1.trace_add("write", update_scale_range_label)
@@ -907,8 +930,8 @@ view_3D_button = ctk.CTkButton(file_tools_frame,text="3D View",command=open_napa
 
 # Process image segmentation button
 #save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_file)
-save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_mask)
-#save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=create_noise)
+save_file_button = ctk.CTkButton(file_tools_frame, text="Save Mask", command=save_mask)
+#save_file_button = ctk.CTkButton(file_tools_frame, text="Create Noise", command=create_noise)
 
 root.bind("<Configure>", on_window_resize)
 

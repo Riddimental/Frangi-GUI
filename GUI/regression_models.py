@@ -68,7 +68,7 @@ scaler = StandardScaler()
 X_scaled = scaler.fit_transform(X)
 
 # Transformar características para crear términos polinomiales
-poly = PolynomialFeatures(degree=4)  # Cambia el grado según la complejidad deseada
+poly = PolynomialFeatures(degree=5)  # Cambia el grado según la complejidad deseada
 X_poly = poly.fit_transform(X_scaled)
 
 # Entrenar el modelo de regresión polinómica

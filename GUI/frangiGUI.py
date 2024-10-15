@@ -355,7 +355,7 @@ def apply_frangi():
         mod = nii_3d_image_original.copy()
         mod[:,:,nii_3d_image_original.shape[2]-10:] = 1
         try:
-            output = tensor_frangi.my_frangi_filter_parallel(mod, sigmas, alpha_val, beta_val, isblack, mask)
+            output = tensor_frangi.my_frangi_filter_parallel(mod, sigmas, alpha_val, beta_val, isblack)
             # Update the global variable with the result
             nii_3d_image = output
             release_button(apply_frangi_button)
@@ -953,8 +953,8 @@ apply_frangi_button = ctk.CTkButton(file_tools_frame,text="Apply Frangi",command
 view_3D_button = ctk.CTkButton(file_tools_frame,text="3D View",command=open_napari)
 
 # Process image segmentation button
-#save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_file)
-save_file_button = ctk.CTkButton(file_tools_frame, text="Save Mask", command=save_mask)
+save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_file)
+#save_file_button = ctk.CTkButton(file_tools_frame, text="Save Mask", command=save_mask)
 #save_file_button = ctk.CTkButton(file_tools_frame, text="Create Noise", command=create_noise)
 
 root.bind("<Configure>", on_window_resize)

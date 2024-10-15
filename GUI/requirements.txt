@@ -1,9 +1,12 @@
+matplotlib
 customtkinter
+opencv-python
+scikit-learn
 numpy
 napari[all]
 RangeSlider
 nibabel
-matplotlib
 Pillow
-opencv-python
-virtualenv
+torch
+torchvision
+pygame

@@ -1,17 +1,12 @@
 import math
-import cv2
-import nibabel as nib
-#np.set_printoptions(threshold=sys.maxsize)
 import matplotlib.pyplot as plt
-from PIL import Image
 import os
 import shutil
-from itertools import product
 import numpy as np
 import scipy.ndimage as ndi
 from skimage import filters
-from scipy.linalg import eigvals, norm
-from itertools import combinations_with_replacement
+from skimage.transform import resize
+
 
 def delete_temp():
    # Delete the contents of the temp folder
@@ -32,10 +27,57 @@ def delete_temp():
    else:
       print(f"The folder {folder_path} does not exist.")
 
+def resample_image(image_data, target_voxel_size):
+   current_voxel_sizes = np.array(image_data.header.get_zooms())
+   shape = image_data.get_fdata().shape * (current_voxel_sizes/target_voxel_size)
+   new_image_data = resize(image_data.get_fdata(), output_shape=shape, mode='constant')
+   print("image reshaped from ", image_data.get_fdata().shape , " to ", new_image_data.shape)
+   return new_image_data
+
+
 def mm2voxel(mm, voxel_size):
    num_voxels = mm / voxel_size
-   print("for a voxel size of ",voxel_size,", ",mm, "mm's of diameter is ",num_voxels," voxels")
+   #print("for a voxel size of ",voxel_size," cubic mm, ",mm, "mm's of diameter is ",num_voxels," voxels")
    return num_voxels #returns the diameter
+
+def voxel2mm(num_voxels, voxel_size):
+   mm = num_voxels * voxel_size
+   #print("for a voxel size of ",voxel_size," cubic mm, ",num_voxels, " voxels is equivalent to ",mm," mm")
+   return mm  # returns the diameter in mm
+
+def calculate_noise(input_image: np.ndarray):
+   img_data = input_image
+   # Ajustar el tamaño del filtro según las dimensiones de la imagen
+   filter_size = max(3, min(img_data.shape) // 100)  # Ejemplo dinámico: un tamaño base de 3, ajustado por la escala de la imagen
+   
+   # Aplicar el filtro de mediana
+   smooth_image = ndi.median_filter(img_data, size=filter_size)
+   
+   # Resto del cálculo es igual
+   residual_noise = img_data - smooth_image
+   
+   corner_size = [int(dim * 0.05) for dim in img_data.shape]
+   
+   corners = [
+   residual_noise[:corner_size[0], :corner_size[1], :corner_size[2]],   # (0,0,0)
+   residual_noise[-corner_size[0]:, :corner_size[1], :corner_size[2]],  # (end,0,0)
+   residual_noise[:corner_size[0], -corner_size[1]:, :corner_size[2]],  # (0,end,0)
+   residual_noise[:corner_size[0], :corner_size[1], -corner_size[2]:],  # (0,0,end)
+   residual_noise[-corner_size[0]:, -corner_size[1]:, :corner_size[2]], # (end,end,0)
+   residual_noise[-corner_size[0]:, :corner_size[1], -corner_size[2]:], # (end,0,end)
+   residual_noise[:corner_size[0], -corner_size[1]:, -corner_size[2]:], # (0,end,end)
+   residual_noise[-corner_size[0]:, -corner_size[1]:, -corner_size[2]:], # (end,end,end)
+   ]
+   
+   # Combinar todas las muestras de las esquinas en una muestra grande
+   large_sample = np.concatenate([corner.flatten() for corner in corners])
+   
+   std_deviation_noise = np.std(large_sample)   
+
+   scaled_sigma = std_deviation_noise
+   
+   return scaled_sigma
+
 
 def intensity_rescale(image, new_min=0, new_max=1):
    """
@@ -80,16 +122,19 @@ def thresholding2d(data, threshold):
    transformed_image = data > threshold
    plt.imsave("temp/plot.jpeg", transformed_image, cmap = 'gray')
 
-def gaussian_preview(data, intensity):
-   data = ndi.gaussian_filter(data, intensity)
-   plt.imsave("temp/plot.jpeg", data, cmap='gray')
-   #plt.close()
+def gaussian_preview(data, intensity, root=None):
+   data = ndi.gaussian_filter(data, intensity, mode='constant')
+   if(root):
+      root.after(15, plt.imsave("temp/plot.jpeg", data, cmap='gray'))
+   else:
+      plt.imsave("temp/plot.jpeg", data, cmap='gray')
+   
 
 def gaussian3d(data3D, intensity):
    kernel_size = max(1, math.trunc(intensity))
    if kernel_size % 2 == 0:
       kernel_size += 1  # Make it odd if it's even
-   data = ndi.gaussian_filter(data3D, intensity/3)
+   data = ndi.gaussian_filter(data3D, intensity/3, mode='constant')
    return data
 
 def sci_frangi(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cval=1):
@@ -97,30 +142,25 @@ def sci_frangi(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, cval=1):
    print("sci-kit frangi applied")
    return processed
 
-def my_frangi_filter(image, scale_range=(1, 10), alpha=1, beta=0.5, steps=2, black_vessels=True):
+def my_frangi_filter(image, sigmas=[1], alpha=1, beta=0.5, black_vessels=True):
    # Ensure input image is of type float64
    image = image.astype(np.float64)
-   up_limit = np.max(image)
+   image /= np.max(image) # image normalized
    
    if black_vessels:
         image = -image
-        image = intensity_rescale(image,0,up_limit) # invert the image and keep proportions
 
-   division = (scale_range[1] - scale_range[0]) / steps
    vesselness = np.zeros_like(image)
-   print('Scales from', scale_range[0], 'to', scale_range[1], 'in', steps, 'steps.')
    
-   scale = scale_range[0]
-   while scale <= scale_range[1]:
-      print('Current scale:', scale)
-      eigenvalues = compute_hessian_return_eigvals(image, sigma=scale)
+   for sigma in sigmas:
+      print('Current scale:', sigma)
+      eigenvalues = compute_hessian_return_eigvals(image, sigma=sigma)
       #print("shapes eigs are ", eigenvalues.shape)
       output = compute_vesselness(eigenvalues, alpha, beta).astype(np.float64)
       vesselness += output
-      scale += division
    
    print("Frangi filter applied.")
-   return vesselness
+   return vesselness/np.max(vesselness)
 
 def compute_eig_vals(hessian):
    # Compute eigenvalues
@@ -167,7 +207,6 @@ def compute_hessian_return_eigvals(_3d_image_array, sigma=1):
    #print("hessian shape ", hessian.shape)
 
    # Compute the norm of the structure tensors for cval and Compute eigenvalues
-   cvals = np.zeros_like(_3d_image_array)
    eig_vals = np.zeros((_3d_image_array.shape[0], _3d_image_array.shape[1], _3d_image_array.shape[2], 3))
    
    eig_vals = compute_eig_vals(hessian)
@@ -192,7 +231,7 @@ def compute_vesselness(eigvals, alpha, beta):
    Rb = divide_nonzero(np.abs(lambdas1), np.sqrt(np.abs(np.multiply(lambdas2, lambdas3))))
    #print("Rb shapes ", Rb.shape)
    S = np.sqrt(np.square(lambdas1) + np.square(lambdas2) + np.square(lambdas3))
-   #print("S2 shapes ", S.shape)
+   #print("S : ", S.max())
    
    gamma = S.max() / 2
    if gamma == 0:

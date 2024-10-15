@@ -86,7 +86,7 @@ def compute_hessian_return_eigvals(image: torch.Tensor, sigma: float = 1) -> tor
    return eig_vals
 
 data_list = []
-def process_scale(tensor_image: torch.Tensor, sigma: float, alpha: float, beta: float, mask: np.ndarray):
+def ptestin_rocess_scale(tensor_image: torch.Tensor, sigma: float, alpha: float, beta: float, mask: np.ndarray):
    global data_list
    text = f'Scale {sigma.item():.2f} finished'
    eigenvalues = compute_hessian_return_eigvals(tensor_image, sigma=sigma)
@@ -157,15 +157,22 @@ def dataset_process_scale(tensor_image: torch.Tensor, sigma: float, alpha: float
 
    return output
 
+def process_scale(tensor_image: torch.Tensor, sigma: float, alpha: float, beta: float, mask: np.ndarray):
+   global data_list
+   # Compute eigenvalues and vesselness
+   eigenvalues = compute_hessian_return_eigvals(tensor_image, sigma=sigma)
+   output = compute_vesselness(eigenvalues, alpha, beta).real
+   print(f'Scale {sigma:.2f} finished')
 
+   return output
 
 
 def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha: float = 1, beta: float = 0.5, black_vessels: bool = True, mask: np.ndarray = None) -> np.ndarray:
    global data_list
    tensor_image = torch.tensor(input_image, dtype=torch.float64)  # Ensure the image is float64
    tensor_image /= tensor_image.max()  # Normalize the image
-   mixer.init()
    print('Running Fragi filter in parallel')
+   mixer.init()
    mixer.music.load('sounds/loading.mp3')
    mixer.music.play()
    if not black_vessels:
@@ -203,7 +210,7 @@ def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha
    print('avg_F_1 =',avg_F_1)
    '''
    
-   
+   '''
    data_list.sort(key=lambda x: x[0])
    scales, avg_B_1, avg_B_2, avg_B_3, avg_B_4, avg_B_5, avg_B_6, avg_B_7, avg_F_1, avg_F_2, avg_F_3, avg_F_4, avg_F_5, avg_F_6, avg_F_7,  = map(list, zip(*data_list))
    data_list = []
@@ -223,6 +230,6 @@ def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha
    print('avg_F_5 =',avg_F_5)
    print('avg_F_6 =',avg_F_6)
    print('avg_F_7 =',avg_F_7)
-   
+   '''
    vesselness_np = vesselness.cpu().numpy()
    return vesselness_np / vesselness_np.max()

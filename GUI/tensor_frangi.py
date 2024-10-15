@@ -85,87 +85,22 @@ def compute_hessian_return_eigvals(image: torch.Tensor, sigma: float = 1) -> tor
    
    return eig_vals
 
-data_list = []
-def process_scale(tensor_image: torch.Tensor, sigma: float, alpha: float, beta: float, mask: np.ndarray):
+def process_scale(tensor_image: torch.Tensor, sigma: float, alpha: float, beta: float):
    global data_list
-   text = f'Scale {sigma.item():.2f} finished'
-   eigenvalues = compute_hessian_return_eigvals(tensor_image, sigma=sigma)
-   output = compute_vesselness(eigenvalues, alpha, beta).real
-   rangey = 8
-   
-   mask1 = mask.copy()
-   mask2 = mask.copy()
-   mask3 = mask.copy()
-   mask4 = mask.copy()
-   mask5 = mask.copy()
-   mask6 = mask.copy()
-   mask7 = mask.copy()
-   mask1[75:,:,:] = 0
-   mask2[:75,:,:] = 0
-   mask2[125:,:,:] = 0
-   mask3[:125,:,:] = 0
-   mask3[175:,:,:] = 0
-   mask4[:175,:,:] = 0
-   mask4[225:,:,:] = 0
-   mask5[:225,:,:] = 0
-   mask5[275:,:,:] = 0
-   mask6[:275,:,:] = 0
-   mask6[325:,:,:] = 0
-   mask7[:325,:,:] = 0
-   avg_intensity_B_1 = torch.mean(output[mask1 ==1])
-   avg_intensity_B_2 = torch.mean(output[mask2 ==1])
-   avg_intensity_B_3 = torch.mean(output[mask3 ==1])
-   avg_intensity_B_4 = torch.mean(output[mask4 ==1])
-   avg_intensity_B_5 = torch.mean(output[mask5 ==1])
-   avg_intensity_B_6 = torch.mean(output[mask6 ==1])
-   avg_intensity_B_7 = torch.mean(output[mask7 ==1])
-   avg_intensity_F_1 = torch.mean(output[50,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
-   avg_intensity_F_2 = torch.mean(output[100,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
-   avg_intensity_F_3 = torch.mean(output[150,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
-   avg_intensity_F_4 = torch.mean(output[200,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
-   avg_intensity_F_5 = torch.mean(output[249,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
-   avg_intensity_F_6 = torch.mean(output[299,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
-   avg_intensity_F_7 = torch.mean(output[349,(output.shape[1]//2) - rangey: (output.shape[1]//2) + rangey, output.shape[2]//2])
-   
-   data_list.append([sigma.item(),avg_intensity_B_1.item(),avg_intensity_B_2.item(),avg_intensity_B_3.item(),avg_intensity_B_4.item(),avg_intensity_B_5.item(),avg_intensity_B_6.item(),avg_intensity_B_7.item(),avg_intensity_F_1.item(),avg_intensity_F_2.item(),avg_intensity_F_3.item(),avg_intensity_F_4.item(),avg_intensity_F_5.item(),avg_intensity_F_6.item(),avg_intensity_F_7.item()])
-   print(text)
-   return output
-
-import torch.nn.functional as F
-
-def dataset_process_scale(tensor_image: torch.Tensor, sigma: float, alpha: float, beta: float, mask: np.ndarray):
-   global data_list
-
    # Compute eigenvalues and vesselness
    eigenvalues = compute_hessian_return_eigvals(tensor_image, sigma=sigma)
    output = compute_vesselness(eigenvalues, alpha, beta).real
-
-   # Ensure the mask is a PyTorch tensor
-   mask_tensor = torch.tensor(mask, dtype=torch.float32, device=output.device)
-
-   # Reshape the output to match the mask shape
-   output_resampled = F.interpolate(output.unsqueeze(0).unsqueeze(0), size=mask_tensor.shape, mode='trilinear', align_corners=True)
-   output_resampled = output_resampled.squeeze(0).squeeze(0)  # Remove the batch and channel dimensions
-
-   # Calculate the mean intensity for the mask
-   avg_intensity_F_1 = torch.mean(output_resampled[mask_tensor == 1])
-
-   # Append results to the global data list
-   data_list.append([sigma.item(), avg_intensity_F_1.item()])
-   
    print(f'Scale {sigma:.2f} finished')
 
    return output
 
 
-
-
-def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha: float = 1, beta: float = 0.5, black_vessels: bool = True, mask: np.ndarray = None) -> np.ndarray:
+def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha: float = 1, beta: float = 0.5, black_vessels: bool = True) -> np.ndarray:
    global data_list
    tensor_image = torch.tensor(input_image, dtype=torch.float64)  # Ensure the image is float64
    tensor_image /= tensor_image.max()  # Normalize the image
-   mixer.init()
    print('Running Fragi filter in parallel')
+   mixer.init()
    mixer.music.load('sounds/loading.mp3')
    mixer.music.play()
    if not black_vessels:
@@ -179,7 +114,7 @@ def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha
 
    # Use ThreadPoolExecutor for parallel execution
    with ThreadPoolExecutor() as executor:
-      futures = [executor.submit(process_scale, tensor_image, sigma, alpha, beta, mask) for sigma in sigmas]
+      futures = [executor.submit(process_scale, tensor_image, sigma, alpha, beta) for sigma in sigmas]
       
       # Collect the results as they complete
       for future in futures:
@@ -194,35 +129,5 @@ def my_frangi_filter_parallel(input_image: np.ndarray, sigmas: list = [1], alpha
    mixer.music.load('sounds/done.mp3')
    mixer.music.play()
    print(f"Frangi filter applied in {duration:.4f} seconds.")
-   # First, sort the data_list based on the first element (scale) of each triplet
-   '''
-   data_list.sort(key=lambda x: x[0])
-   scales, avg_F_1 = map(list, zip(*data_list))
-   data_list = []
-   print('scales =',scales)
-   print('avg_F_1 =',avg_F_1)
-   '''
-   
-   
-   data_list.sort(key=lambda x: x[0])
-   scales, avg_B_1, avg_B_2, avg_B_3, avg_B_4, avg_B_5, avg_B_6, avg_B_7, avg_F_1, avg_F_2, avg_F_3, avg_F_4, avg_F_5, avg_F_6, avg_F_7,  = map(list, zip(*data_list))
-   data_list = []
-   print('scales =',scales)
-   print('avg_B_1 =',avg_B_1)
-   print('avg_B_2 =',avg_B_2)
-   print('avg_B_3 =',avg_B_3)
-   print('avg_B_4 =',avg_B_4)
-   print('avg_B_5 =',avg_B_5)
-   print('avg_B_6 =',avg_B_6)
-   print('avg_B_7 =',avg_B_7)
-   
-   print('avg_F_1 =',avg_F_1)
-   print('avg_F_2 =',avg_F_2)
-   print('avg_F_3 =',avg_F_3)
-   print('avg_F_4 =',avg_F_4)
-   print('avg_F_5 =',avg_F_5)
-   print('avg_F_6 =',avg_F_6)
-   print('avg_F_7 =',avg_F_7)
-   
    vesselness_np = vesselness.cpu().numpy()
    return vesselness_np / vesselness_np.max()

@@ -11,6 +11,7 @@ import nibabel as nib
 import matplotlib.pyplot as plt
 import torch
 import filters
+import regression_models
 import tensor_frangi
 from tkinter import Toplevel, filedialog, ttk
 from PIL import Image, ImageTk
@@ -67,6 +68,7 @@ if not os.path.exists(temp_directory):
 
 # Defining global variables
 max_value = 0
+calculated_noise = 0.0
 alpha_val = 0.2
 beta_val=0.8
 step_val = 1
@@ -81,6 +83,7 @@ original_canvas_width = 0
 original_canvas_height = 0
 file_path = ""
 threshold_value = 0
+nii_file_original = None
 
 nii_2d_image = []
 nii_file = []
@@ -262,14 +265,21 @@ def refresh_text(text):
     root.after(5000, update_text)
     
 def show_noise():
+    global calculated_noise, predict_button
+    #mixer.init()
+    mixer.music.load('sounds/noise.mp3')
+    mixer.music.play()
     noise_size = filters.calculate_noise(nii_3d_image) * 2
     # Apply correction factor to calculated sigma based on the paper's research
-    corrected_calculated_sigma = noise_size - (0.223 * noise_size)
+    calculated_noise = noise_size - (0.223 * noise_size)
     # print("Aproximate Noise Size: ", noise_size," mm")
-    print(f"Calculated Noise Sigma for {image_name}: ", corrected_calculated_sigma)
+    print(f"Calculated Noise Sigma for {image_name}: ", calculated_noise)
+    refresh_text(f"Calculated Noise Sigma: {calculated_noise:.2f} mm")
+    predict_button.configure(state="normal", text="Predict Scale")
+    
 
 def add_image():
-    global file_path, nii_3d_image_original, nii_3d_image, file_selected, voxel_size, original_canvas_width, original_canvas_height, min_voxel_size, image_name
+    global file_path, nii_3d_image_original, nii_3d_image, file_selected, voxel_size, original_canvas_width, original_canvas_height, min_voxel_size, image_name, nii_file_original, predict_button
     filters.delete_temp()
     # Get the dimensions of the canvas
     original_canvas_width = canvas_frame.winfo_width()
@@ -278,10 +288,10 @@ def add_image():
     if file_path:
         try:
             # reading file
+            predict_button.configure(state="disabled", text="Reading Noise")
             nii_file_original = nib.load(file_path)
             nii_file = nib.load(file_path).get_fdata()
             nii_file.shape
-
             # Access the header metadata
             header = nii_file_original.header
             # Get voxel sizes
@@ -309,7 +319,7 @@ def add_image():
             root.resizable(True, True)
             text="Loaded Image: " + image_name
             refresh_text(text)
-            print("Image loaded, Dim: ", nii_3d_image.shape)
+            print(f"Image loaded {image_name}, Dim: {nii_3d_image.shape}")
             image_name = os.path.basename(file_path)
 
         except Exception as e:
@@ -345,7 +355,7 @@ def apply_frangi():
         mod = nii_3d_image_original.copy()
         mod[:,:,nii_3d_image_original.shape[2]-10:] = 1
         try:
-            output = tensor_frangi.my_frangi_filter_parallel(mod, sigmas, alpha_val, beta_val, isblack, mask)
+            output = tensor_frangi.my_frangi_filter_parallel(mod, sigmas, alpha_val, beta_val, isblack)
             # Update the global variable with the result
             nii_3d_image = output
             release_button(apply_frangi_button)
@@ -499,9 +509,17 @@ def change_beta(val):
 def change_sigma_val(val):
     global sigma_val
     sigma_val = float(val)
-    filters.gaussian_preview(nii_2d_image,filters.mm2voxel(sigma_val, min_voxel_size), root)
+    filters.gaussian_preview(nii_2d_image,filters.mm2voxel(val, min_voxel_size), root)
     text_val = "Diameter: {:.2f} mm".format(sigma_val)
     diameter_label.configure(text=text_val)
+    
+def predict_scale():
+    hold_button(predict_button)
+    best_scale = regression_models.predict_scale(calculated_noise,min_voxel_size/2)
+    change_sigma_val(2*best_scale) #the scale is the radius not the diameter
+    #diameter_slider.set(2*best_scale) #the scale is the radius not the diameter
+    refresh_text(f"Scale predicted: {best_scale} mm")
+    release_button(predict_button)
     
 def change_scale_step(val):
     global step_val
@@ -790,16 +808,22 @@ segmentation_tabs = ttk.Notebook(master=left_frame_canvas)
 
 #basic tab
 basic_tab = ttk.Frame(segmentation_tabs)
+basic_tab.columnconfigure(0, weight=1)
+
 text_sigma_val = "Diameter: {:.2f} mm".format(sigma_val)
 diameter_label = ctk.CTkLabel(basic_tab, text=text_sigma_val, bg_color=message_label.cget('bg_color'))
-diameter_label.pack(pady=5, padx=0)
+diameter_label.grid(row=0, column=0, sticky='nsew', padx=5, pady=(5,5))
 
 diameter_slider = ctk.CTkSlider(basic_tab, from_=0.0, to=30.0, command=change_sigma_val, width=120)
 diameter_slider.set(sigma_val)
-diameter_slider.pack(padx=20, pady=2, fill='x')
-diameter_slider.configure(bg_color=message_label.cget('bg_color'))
+diameter_slider.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
+
+predict_button = ctk.CTkButton(basic_tab, text="Reading Noise",state="disabled", command=predict_scale)
+predict_button.grid(row=2, column=0, sticky='nsew', padx=5, pady=10)
+
 segmentation_tabs.add(basic_tab, text="Basic")
 segmentation_tabs.bind("<<NotebookTabChanged>>", switch_mode)
+
 
 #Advanced tab
 advanced_tab = ttk.Frame(segmentation_tabs)
@@ -929,8 +953,8 @@ apply_frangi_button = ctk.CTkButton(file_tools_frame,text="Apply Frangi",command
 view_3D_button = ctk.CTkButton(file_tools_frame,text="3D View",command=open_napari)
 
 # Process image segmentation button
-#save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_file)
-save_file_button = ctk.CTkButton(file_tools_frame, text="Save Mask", command=save_mask)
+save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_file)
+#save_file_button = ctk.CTkButton(file_tools_frame, text="Save Mask", command=save_mask)
 #save_file_button = ctk.CTkButton(file_tools_frame, text="Create Noise", command=create_noise)
 
 root.bind("<Configure>", on_window_resize)

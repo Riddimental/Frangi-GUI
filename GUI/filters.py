@@ -45,7 +45,7 @@ def voxel2mm(num_voxels, voxel_size):
    #print("for a voxel size of ",voxel_size," cubic mm, ",num_voxels, " voxels is equivalent to ",mm," mm")
    return mm  # returns the diameter in mm
 
-def calculate_noise(input_image):
+def calculate_noise(input_image: np.ndarray):
    img_data = input_image
    # Ajustar el tamaño del filtro según las dimensiones de la imagen
    filter_size = max(3, min(img_data.shape) // 100)  # Ejemplo dinámico: un tamaño base de 3, ajustado por la escala de la imagen

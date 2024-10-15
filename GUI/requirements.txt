@@ -1,6 +1,7 @@
 matplotlib
 customtkinter
 opencv-python
+scikit-learn
 numpy
 napari[all]
 RangeSlider

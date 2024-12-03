@@ -1,10 +1,8 @@
-#model 3 polinomial interpolation 2 degree:
-
 import numpy as np
+import sounds
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
-from pygame import mixer
 
 #Data
 new_peaks_ellipsoid_14 = [0.6153846153846154, 0.6287625418060201, 0.6153846153846154, 0.6956521739130435, 0.8561872909698997, 0.7892976588628763, 1.0702341137123745, 0.9498327759197325, 1.0568561872909699, 1.0167224080267558, 1.7123745819397993]
@@ -42,8 +40,9 @@ sizes = np.array([new_peaks_ellipsoid_1[0],
 sigmas = np.array([0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 
                    0.8, 0.9, 1.0])
 
+
 # Crear una lista con todos los pares (tamaño, sigma) y sus correspondientes escalas
-X = []
+x = []
 y = []
 
 # Tus datos de escalas para cada elipsoide
@@ -53,22 +52,22 @@ scales = [new_peaks_ellipsoid_1, new_peaks_ellipsoid_2, new_peaks_ellipsoid_3,
           new_peaks_ellipsoid_10, new_peaks_ellipsoid_11, new_peaks_ellipsoid_12, 
           new_peaks_ellipsoid_13, new_peaks_ellipsoid_14]
 
-# Llenar X con pares (tamaño, sigma) y y con los valores de escala correspondientes
+# Llenar X con pares (tamaño, snr) y y con los valores de escala correspondientes
 for i, size in enumerate(sizes):
     for j, sigma in enumerate(sigmas):
-        X.append([size, sigma])
+        x.append([size, sigma])
         y.append(scales[i][j])
 
 # Convertir a numpy arrays
-X = np.array(X)
+x = np.array(x)
 y = np.array(y)
 
 # Escalar los datos
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+X_scaled = scaler.fit_transform(x)
 
 # Transformar características para crear términos polinomiales
-poly = PolynomialFeatures(degree=5)  # Cambia el grado según la complejidad deseada
+poly = PolynomialFeatures(degree=3)  # Cambia el grado según la complejidad deseada
 X_poly = poly.fit_transform(X_scaled)
 
 # Entrenar el modelo de regresión polinómica
@@ -78,18 +77,26 @@ model.fit(X_poly, y)
 
 
 
-def predict_scale(sigma:float, size:float) -> float:
-    mixer.init()
-    mixer.music.load('sounds/ai.mp3')
-    mixer.music.play()
+def predict_scale(snr:float, size:float) -> float:
+    
+    #this model was trained with ellipsoids of ROI intensity 1, so the noise sigma that relates the real image to the ellipsoids (snr) is 1/snr, snr = 1/noise
+    
+    #if snr is infity, the noise sigma is 0
+    if snr == float('inf'):
+        noise_sigma = 0
+    else:
+        #noise_sigma = 1/snr
+        noise_sigma = 0.5/snr
+    
+    sounds.ai()
     # Escalar el nuevo dato
-    X_new = scaler.transform([[size, sigma]])
+    X_new = scaler.transform([[size, noise_sigma]])
 
     # Transformar a términos polinomiales
     X_new_poly = poly.transform(X_new)
 
     # Realizar la predicción
     scale_pred = model.predict(X_new_poly)
-    print(f"Escala óptima predicha para tamaño {size} y sigma {sigma}: {scale_pred[0]:.3f}")
+    print(f"Optimal scale predicted for Voxels of {2*size:.2f} mm with snr {snr}: {scale_pred[0]:.3f}")
     
     return float(scale_pred[0])

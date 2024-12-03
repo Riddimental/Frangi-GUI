@@ -4,14 +4,86 @@ import os
 import shutil
 import numpy as np
 import scipy.ndimage as ndi
+import nibabel as nib
 from skimage import filters
 from skimage.transform import resize
+from skimage.restoration import estimate_sigma
 
+
+min_voxel_size = None
+
+def set_min_voxel_size(mm):
+   global min_voxel_size
+   min_voxel_size = mm
+
+def black_vessels(header):   
+   # Get relevant metadata
+   tr = header.get('repetition_time', None)
+   te = header.get('echo_time', None)
+   ti = header.get('inversion_time', None)
+   description = str(header.get('descrip', '')).lower()
+   
+   black_vessels = True
+
+   # Classification logic
+   if tr is not None and te is not None:
+      if 'flair' in description or (ti is not None and ti > 1800):  # Assuming TI > 1800 ms indicates FLAIR
+         print('FLAIR')  # FLAIR
+         black_vessels = True
+      elif tr < 1000 and te < 30:  # Typical T1 parameters
+         print('T1w')  # T1w
+         black_vessels = True
+      elif tr > 2000 and te > 100:  # Typical T2 parameters
+         print('T2w')  # T2w
+         black_vessels = False
+      else:
+         print('Unknown')  # Unknown
+   else:
+      print('Metadata missing')  # Metadata missing
+      
+   return black_vessels
+
+def median_filter(image, kernel_size=(3, 3, 3)):
+   """
+   Apply a median filter to a 3D image array.
+
+   Parameters:
+   - image: 3D numpy array representing the input image.
+   - kernel_size: Tuple specifying the size of the kernel in each dimension (e.g., (3, 3, 3)).
+
+   Returns:
+   - filtered_image: 3D numpy array containing the filtered image.
+   """
+   # Get image shape
+   depth, height, width = image.shape
+
+   # Initialize filtered image
+   filtered_image = np.zeros_like(image)
+
+   # Pad the image to handle borders
+   padded_image = np.pad(image, [(k // 2, k // 2) for k in kernel_size], mode='constant')
+
+   # Iterate over each voxel in the image
+   for d in range(depth):
+      for h in range(height):
+         for w in range(width):
+               # Extract the neighborhood of the current voxel
+               neighborhood = padded_image[d:d+kernel_size[0], h:h+kernel_size[1], w:w+kernel_size[2]]
+
+               # Compute the median of the neighborhood
+               median_value = np.median(neighborhood)
+
+               # Assign the median value to the corresponding voxel in the filtered image
+               filtered_image[d, h, w] = median_value
+   return filtered_image
 
 def delete_temp():
+   global nii_3d_image, nii_3d_image_original
    # Delete the contents of the temp folder
    folder_path = "temp"
 
+   nii_3d_image = []
+   nii_3d_image_original = []
    # Check if the folder exists
    if os.path.exists(folder_path):
       # Iterate over the files in the folder and delete them
@@ -27,25 +99,45 @@ def delete_temp():
    else:
       print(f"The folder {folder_path} does not exist.")
 
-def resample_image(image_data, target_voxel_size):
-   current_voxel_sizes = np.array(image_data.header.get_zooms())
-   shape = image_data.get_fdata().shape * (current_voxel_sizes/target_voxel_size)
-   new_image_data = resize(image_data.get_fdata(), output_shape=shape, mode='constant')
-   print("image reshaped from ", image_data.get_fdata().shape , " to ", new_image_data.shape)
-   return new_image_data
+
+def isometric_voxels(image_file: nib.Nifti1Image) -> nib.Nifti1Image:
+   
+   header = image_file.header
+   # Get voxel sizes
+   voxel_sizes = header.get_zooms()
+   min_voxel_size = min(voxel_sizes)
+   
+   # Resample the image data to ensure isometric voxels
+   if all(v == voxel_sizes[0] for v in voxel_sizes): #no need to resize
+      print("Voxels are already Isometric")
+      return image_file
+   else:
+      shape = np.round(image_file.get_fdata().shape * (voxel_sizes / min_voxel_size)).astype(int)
+      isometric_data = resize(image_file.get_fdata(), output_shape=shape, mode='constant')
+      print("Image reshaped from ", image_file.get_fdata().shape, " to ", isometric_data.shape)
+
+      # Create new affine with the new voxel size
+      new_affine = image_file.affine.copy()
+      new_affine[:3, :3] *= (voxel_sizes / min_voxel_size)[:, np.newaxis]
+
+      # Create and return the new NIfTI image with updated zooms
+      new_nifti = nib.Nifti1Image(isometric_data, new_affine)
+      new_nifti.header.set_zooms((min_voxel_size, min_voxel_size, min_voxel_size))
+   
+      return new_nifti
 
 
-def mm2voxel(mm, voxel_size):
-   num_voxels = mm / voxel_size
+def mm2voxel(mm):
+   num_voxels = mm / min_voxel_size
    #print("for a voxel size of ",voxel_size," cubic mm, ",mm, "mm's of diameter is ",num_voxels," voxels")
    return num_voxels #returns the diameter
 
-def voxel2mm(num_voxels, voxel_size):
-   mm = num_voxels * voxel_size
+def voxel2mm(num_voxels):
+   mm = num_voxels * min_voxel_size
    #print("for a voxel size of ",voxel_size," cubic mm, ",num_voxels, " voxels is equivalent to ",mm," mm")
    return mm  # returns the diameter in mm
 
-def calculate_noise(input_image: np.ndarray):
+def oldcalculate_noise(input_image: np.ndarray):
    img_data = input_image
    # Ajustar el tamaño del filtro según las dimensiones de la imagen
    filter_size = max(3, min(img_data.shape) // 100)  # Ejemplo dinámico: un tamaño base de 3, ajustado por la escala de la imagen
@@ -78,6 +170,149 @@ def calculate_noise(input_image: np.ndarray):
    
    return scaled_sigma
 
+
+def calculate_noise(input_image: np.ndarray):
+   img_data = input_image
+   # Ajustar el tamaño del filtro según las dimensiones de la imagen
+   
+   img_data = input_image
+   #downsample the image to blur
+   #toblur = resize(input_image, (input_image.shape[0] // 2, input_image.shape[1] // 2, input_image.shape[2] // 2))
+   #blurred_image = ndi.median_filter(toblur, size=3)
+   #max_intensity = blurred_image.max()
+   #print('max intensity ', max_intensity)
+   
+   # Tamaño de las esquinas: 5% de las dimensiones de la imagen
+   corner_size = [int(dim * 0.05) for dim in img_data.shape]
+   
+   # Seleccionar las esquinas
+   corners = [
+       img_data[:corner_size[0], :corner_size[1], :corner_size[2]],   # (0,0,0)
+       img_data[-corner_size[0]:, :corner_size[1], :corner_size[2]],  # (end,0,0)
+       img_data[:corner_size[0], -corner_size[1]:, :corner_size[2]],  # (0,end,0)
+       img_data[:corner_size[0], :corner_size[1], -corner_size[2]:],  # (0,0,end)
+       img_data[-corner_size[0]:, -corner_size[1]:, :corner_size[2]], # (end,end,0)
+       img_data[-corner_size[0]:, :corner_size[1], -corner_size[2]:], # (end,0,end)
+       img_data[:corner_size[0], -corner_size[1]:, -corner_size[2]:], # (0,end,end)
+       img_data[-corner_size[0]:, -corner_size[1]:, -corner_size[2]:] # (end,end,end)
+   ]
+   
+   # Aplicar el filtro de mediana solo a las esquinas
+   filtered_corners = [ndi.median_filter(corner, size=3) for corner in corners]
+   
+   # Calcular el ruido residual (restar el filtro mediana aplicado en las esquinas)
+   residual_noise_corners = [corner - filtered_corner for corner, filtered_corner in zip(corners, filtered_corners)]
+   
+   # Combinar todas las muestras de las esquinas en una muestra grande
+   large_sample = np.concatenate([corner.flatten() for corner in residual_noise_corners])
+   
+   # Calcular la desviación estándar del ruido
+   std_deviation_noise = np.std(large_sample)
+
+   scaled_sigma = std_deviation_noise
+   
+   return scaled_sigma*2
+
+
+
+def all_noise_measurements(input_image: np.ndarray) -> dict:
+   """
+   Estimate noise in an MRI image using various methods, considering only background corners.
+   
+   :param input_image: 3D MRI image data
+   :return: Dictionary with noise estimation results.
+   """
+   img_data = input_image
+
+   # 1. Background Region Method (ROI from image corners)
+   # Select corners (5% of the dimensions of the image)
+   corner_size = [int(dim * 0.05) for dim in img_data.shape]
+   corners = [
+      img_data[:corner_size[0], :corner_size[1], :corner_size[2]],   # (0,0,0)
+      img_data[-corner_size[0]:, :corner_size[1], :corner_size[2]],  # (end,0,0)
+      img_data[:corner_size[0], -corner_size[1]:, :corner_size[2]],  # (0,end,0)
+      img_data[:corner_size[0], :corner_size[1], -corner_size[2]:],  # (0,0,end)
+      img_data[-corner_size[0]:, -corner_size[1]:, :corner_size[2]], # (end,end,0)
+      img_data[-corner_size[0]:, :corner_size[1], -corner_size[2]:], # (end,0,end)
+      img_data[:corner_size[0], -corner_size[1]:, -corner_size[2]:], # (0,end,end)
+      img_data[-corner_size[0]:, -corner_size[1]:, -corner_size[2]:] # (end,end,end)
+   ]
+
+   # Compute the mean intensity for each corner
+   corner_means = [np.mean(corner) for corner in corners]
+
+   # Filter out corners with mean intensities significantly higher than the median of the other corners, the noise is trusted to be uniform in the hole image, if one of the corers is significantly higher, its discarded due to the fact that they might have important tissue
+   median_intensity = np.median(corner_means)
+   threshold = 5 * median_intensity
+   background_corners = [corner for i, corner in enumerate(corners) if corner_means[i] <= threshold]
+
+   # Flatten and combine the remaining valid background corners
+   if len(background_corners) == 0:
+      print("No valid background corners found.")
+      return None, None
+   
+   large_sample = np.concatenate([corner.flatten() for corner in background_corners])
+
+   # 2. Select Center Region of interest (ROI) (20% of the image dimensions)
+   center_size = [int(dim * 0.2) for dim in img_data.shape]
+   center_region = img_data[
+      img_data.shape[0]//2 - center_size[0]//2 : img_data.shape[0]//2 + center_size[0]//2,
+      img_data.shape[1]//2 - center_size[1]//2 : img_data.shape[1]//2 + center_size[1]//2,
+      img_data.shape[2]//2 - center_size[2]//2 : img_data.shape[2]//2 + center_size[2]//2
+   ]
+   
+   # Compute mean intensity in the center region
+   mean_signal_intensity_center = np.mean(center_region)
+   
+   # 3. Rician Noise Estimation (using skimage)
+   rician_noise_sigma = estimate_sigma(large_sample, average_sigmas=True)
+   
+   # Avoid NaN or very small values for Rician noise sigma
+   if np.isnan(rician_noise_sigma):
+      rician_noise_sigma = 0.0
+
+   # SNR calculation based on mean intensity of the center region
+   snr = mean_signal_intensity_center / rician_noise_sigma
+   
+   actual_noise = rician_noise_sigma*2*0.875
+   
+   return actual_noise, snr
+
+
+
+def new_calculate_noise(input_image: np.ndarray):
+   img_data = input_image
+   #downsample the image to blur
+   toblur = resize(input_image, (input_image.shape[0] // 2, input_image.shape[1] // 2, input_image.shape[2] // 2))
+   blurred_image = ndi.median_filter(toblur, size=int(mm2voxel(4)))
+   max_intensity = blurred_image.max()
+   print('max intensity ', max_intensity)
+   
+   # Tamaño de las esquinas: 5% de las dimensiones de la imagen
+   corner_size = [int(dim * 0.05) for dim in img_data.shape]
+   
+   # Seleccionar las esquinas
+   corners = [
+       img_data[:corner_size[0], :corner_size[1], :corner_size[2]],   # (0,0,0)
+       img_data[-corner_size[0]:, :corner_size[1], :corner_size[2]],  # (end,0,0)
+       img_data[:corner_size[0], -corner_size[1]:, :corner_size[2]],  # (0,end,0)
+       img_data[:corner_size[0], :corner_size[1], -corner_size[2]:],  # (0,0,end)
+       img_data[-corner_size[0]:, -corner_size[1]:, :corner_size[2]], # (end,end,0)
+       img_data[-corner_size[0]:, :corner_size[1], -corner_size[2]:], # (end,0,end)
+       img_data[:corner_size[0], -corner_size[1]:, -corner_size[2]:], # (0,end,end)
+       img_data[-corner_size[0]:, -corner_size[1]:, -corner_size[2]:] # (end,end,end)
+   ]
+   
+   # Combinar todas las muestras de las esquinas en una muestra grande
+   large_sample = np.concatenate([corner.flatten() for corner in corners])
+   
+   # Calcular la desviación estándar del ruido
+   std_deviation_noise = np.std(large_sample)
+
+   scaled_sigma = std_deviation_noise / max_intensity
+   #scaled_sigma = std_deviation_noise / np.median(large_sample)
+   
+   return scaled_sigma
 
 def intensity_rescale(image, new_min=0, new_max=1):
    """

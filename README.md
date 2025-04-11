@@ -8,7 +8,11 @@ This tool is designed for MRI data. It provides a user interface for uploading a
 
 ## Installation
 
-Ensure you have Python 3.x installed on your system.
+Ensure you have Python 3.x installed on your system. (for MacOS users make sure python-tk is installe in the homebrew)
+
+```bash
+brew install python-tk
+```
 
 First create a virtual enviroment where to install all the dependencies for this Python application using:
 
@@ -61,30 +65,26 @@ Once the image loads, the interface will display the first slice of your file al
 
 ![Image load](screenshots/coronal.png)
 
-![First action](screenshots/intro.gif)
-
 The interface offers various options, including different filters and visualization tools, along with a slider to navigate through each slice of your 3D image:
 
 ![Main interface](screenshots/sagital.png)
 
-![Image Slices](screenshots/slices.gif)
-![Main interface](screenshots/interface.gif)
+To apply segmentation, set the parameters alpha, beta and scale range manually on advanced mode:
 
-To apply segmentation, set the parameters alpha, beta, c and scale range:
+![Parameters selection](screenshots/advanced.png)
 
-![File selection](screenshots/selection.gif)
-![File selection](screenshots/axial.png)
+Or Click the SCALR button for automatic scale selection:
+
+![Parameters selection](screenshots/scalr.png)
 
 Once the selection is made, click the "Apply Frangi" button to initiate the Frangi's filtering process:
 
-![Main interface](screenshots/segmented_axial.png)
-![Main interface](screenshots/selection2.gif)
+![Image Processing](screenshots/processing.png)
+![Image Processed](screenshots/processed.png)
 
-You can apply additional filters before segmentation; feel free to experiment with the filter parameters in the filters window:
+You can also visualize the segmented image in 3D:
 
-![Main interface](screenshots/filters.png)
-![Main interface](screenshots/threshold.gif)
-![Main interface](screenshots/gaussian.gif)
+![3D Render](screenshots/3Dview.png)
 
 
 ## Dependencies

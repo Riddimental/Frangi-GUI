@@ -8,7 +8,11 @@ This tool is designed for MRI data. It provides a user interface for uploading a
 
 ## Installation
 
-Ensure you have Python 3.x installed on your system.
+Ensure you have Python 3.x installed on your system. (for MacOS users make sure python-tk is installe in the homebrew)
+
+```bash
+brew install python-tk
+```
 
 First create a virtual enviroment where to install all the dependencies for this Python application using:
 

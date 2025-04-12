@@ -1,107 +1,141 @@
 # Fangi's Multi-Scale Vesselness Filter GUI
-Preivascular Spaces (PVS) pathfinder(beta)
+**Prevascular Spaces (PVS) Pathfinding Tool (Beta)**
 
+## Overview
 
-# MRI Vesselness Tool
+This tool provides a user-friendly interface for processing MRI data using Frangi’s Multi-Scale Vesselness Filter. It allows for the segmentation of Prevascular Spaces (PVS) in MRI scans, which is essential for medical imaging analysis. The application supports parameter adjustments for Frangi's equation through interactive sliders and provides advanced options for fine-tuning the results.
 
-This tool is designed for MRI data. It provides a user interface for uploading an MRI image, adjusting the Frangi's equation variables as slider parameters, and process the path higlight.
+For detailed information, please refer to the [full research paper](./paper/SCALR_PAPER.pdf) (PDF).
 
 ## Installation
 
-Ensure you have Python 3.x installed on your system. (for MacOS users make sure python-tk is installe in the homebrew)
+Ensure that you have **Python 3.x** installed on your system. You will also need a few additional tools, depending on your operating system.
 
-```bash
-brew install python-tk
-```
+### macOS
 
-First create a virtual enviroment where to install all the dependencies for this Python application using:
+1. Install the necessary dependencies using Homebrew (for Tkinter support):
+   ```bash
+   brew install python-tk
+   ```
 
-```bash
-virtualenv venv
-```
+2. Create a virtual environment to install the dependencies:
+   ```bash
+   python3 -m venv venv
+   ```
 
-Then activate the Virtual enviroment you just created with:
+3. Activate the virtual environment:
+   ```bash
+   source venv/bin/activate
+   ```
 
-```bash
-source venv/bin/activate
-```
+4. Clone this repository and navigate to the directory where the `requirements.txt` file is located:
+   ```bash
+   git clone https://github.com/yourusername/Frangi-GUI.git
+   cd Frangi-GUI/GUI
+   ```
 
-Then clone this repository, navigate to the directory where requirements.txt lives, and install the dependencies using:
+5. Install the required dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-```bash
-pip install -r requirements.txt
-```
+### Windows and Linux
+
+For **Windows** and **Linux** systems, follow these steps:
+
+1. Ensure Python 3.x is installed. If Tkinter is missing, you can install it using the following commands:
+
+   **Windows:**
+   Tkinter should already be bundled with Python. If not, you can download and install it separately.
+
+   **Linux (Ubuntu/Debian):**
+   ```bash
+   sudo apt-get install python3-tk
+   ```
+
+2. Create and activate a virtual environment:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # Linux
+   venv\Scripts\activate     # Windows
+   ```
+
+3. Clone the repository and install the required dependencies:
+   ```bash
+   git clone https://github.com/yourusername/Frangi-GUI.git
+   cd Frangi-GUI/GUI
+   pip install -r requirements.txt
+   ```
 
 ## Usage
 
-Run the script using:
+To start the GUI, run the following command:
 
 ```bash
 python3 frangiGUI.py
 ```
 
-Upon running the script, a GUI window will open. Follow the instructions on the GUI to perform segmentation.
+Upon running the script, a graphical user interface (GUI) will open. From there, you can upload an MRI scan and adjust the parameters for the Frangi filter to segment the Prevascular Spaces (PVS).
 
-## Features
+### Features
 
-- **Image Upload**: Easily upload an image for segmentation, preferably an MRI scan.
-- **Interactive Visualization**: Visualize the MRI scan in Axial, Coronal, or Sagittal mode, allowing for easy exploration and analysis.
-- **3D Visualization**: Utilize Napari's volumetric engine for immersive 3D visualization of the image.
-- **Customizable Parameters**: Set parameters such as alpha (for plate-like or ellipsoid-like shape), beta (for blobness or spherical shape), c (for background noise reduction), and the range of scales according to your segmentation needs.
-- **Segmentation Processing**: Process the segmentation with ease, including bonus filters like Gaussian blur and threshold slider for fine-tuning the results.
+- **Image Upload**: Upload an MRI scan in NIfTI format (.nii).
+- **Interactive Visualization**: Explore the MRI scan in Axial, Coronal, or Sagittal views.
+- **3D Visualization**: View the MRI scan in 3D using Napari’s volumetric engine for immersive exploration.
+- **Customizable Parameters**: Fine-tune Frangi's filter parameters such as alpha (plate-like or ellipsoid-like), beta (blobness), and c (background noise reduction).
+- **Segmentation Processing**: Apply segmentation with options like Gaussian blur and customizable threshold sliders for refining results.
 
-## Walkthrough Images
+### Walkthrough
 
-Upon opening the app, the initial window should resemble the following:
+1. **Start Screen**: Upon opening the application, the first window will appear with an option to upload an image:
+   ![Start Window](screenshots/start.png)
 
-![First window](screenshots/start.png)
+2. **Upload Image**: Select an MRI image in NIfTI format (.nii):
+   ![File Selection](screenshots/load_image.png)
 
+3. **Image Loaded**: Once the image is loaded, you’ll see the first slice along with available customization tools:
+   ![Image Load](screenshots/coronal.png)
 
-Next, select an MRI image in .nii format as shown:
+4. **Advanced Options**: Use the slider to adjust the parameters, or enable advanced mode for manual fine-tuning:
+   ![Advanced Mode](screenshots/advanced.png)
 
-![File selection](screenshots/load_image.png)
+5. **Automatic Scale Selection**: Click the **SCALR** button for automatic scale selection:
+   ![SCALR](screenshots/scalr.png)
 
-Once the image loads, the interface will display the first slice of your file along with tools and options for customization:
+6. **Apply Frangi Filter**: Click the **Apply Frangi** button to begin the segmentation process:
+   ![Processing](screenshots/processing.png)
+   ![Processed](screenshots/processed.png)
 
-![Image load](screenshots/coronal.png)
-
-The interface offers various options, including different filters and visualization tools, along with a slider to navigate through each slice of your 3D image:
-
-![Main interface](screenshots/sagital.png)
-
-To apply segmentation, set the parameters alpha, beta and scale range manually on advanced mode:
-
-![Parameters selection](screenshots/advanced.png)
-
-Or Click the SCALR button for automatic scale selection:
-
-![Parameters selection](screenshots/scalr.png)
-
-Once the selection is made, click the "Apply Frangi" button to initiate the Frangi's filtering process:
-
-![Image Processing](screenshots/processing.png)
-![Image Processed](screenshots/processed.png)
-
-You can also visualize the segmented image in 3D:
-
-![3D Render](screenshots/3Dview.png)
-
+7. **3D Visualization**: Optionally, visualize the segmented image in 3D:
+   ![3D View](screenshots/3Dview.png)
 
 ## Dependencies
 
-- `customtkinter`: A custom module for enhanced GUI elements.
-- `tkinter`: Standard Python interface to the Tk GUI toolkit (usually comes pre-installed with Python).
-- `PIL`: Python Imaging Library to work with images (usually comes pre-installed with Python).
-- `Python`: Python version 3.6 or higher.
-- `numpy`: A powerful library for numerical computing.
-- `nibabel`: A library for reading and writing neuroimaging data in various formats.
-- `matplotlib`: A plotting library for creating static, animated, and interactive visualizations in Python.
+The following dependencies are required to run this tool:
 
+- `customtkinter`: A custom library to enhance GUI elements.
+- `tkinter`: Standard Python interface to the Tk GUI toolkit (usually pre-installed).
+- `PIL`: Python Imaging Library for image handling.
+- `numpy`: For numerical operations.
+- `nibabel`: For reading and writing neuroimaging data.
+- `matplotlib`: For creating visualizations.
+- `napari`: For 3D visualization of MRI data.
+
+### Installing Dependencies
+
+Once the virtual environment is set up, you can install the required dependencies using:
+
+```bash
+pip install -r requirements.txt
+```
 
 ## Contributing
 
-Contributions are welcome! Please open an issue to discuss potential changes/additions.
+We welcome contributions! If you find a bug or have suggestions for new features, please open an issue or submit a pull request.
 
 ## License
 
-This project is licensed under the [Universidad del Valle] 2024
+This project is licensed under the [MIT License](LICENSE).
+
+---
+For more information on the research behind this tool, refer to the [research paper](./paper/SCALR_PAPER.pdf) (PDF).

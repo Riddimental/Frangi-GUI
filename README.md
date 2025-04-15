@@ -3,9 +3,11 @@
 
 ## Overview
 
-This tool provides a user-friendly interface for processing MRI data using Frangi’s Multi-Scale Vesselness Filter. It allows for the segmentation of Prevascular Spaces (PVS) in MRI scans, which is essential for medical imaging analysis. The application supports parameter adjustments for Frangi's equation through interactive sliders and provides advanced options for fine-tuning the results.
+This repository contains the full implementation of **SCALR**, a machine learning–based tool developed as part of my **Laureate Thesis** in Systems and Computer Science Engineering. The thesis was awarded distinction for its contribution to optimizing the Frangi filter for improved perivascular space (PVS) quantification in brain MRI.
 
-For detailed information, please refer to the [full research paper](./paper/SCALR_PAPER.pdf) (PDF).
+SCALR provides a user-friendly interface for processing MRI data using Frangi’s Multi-Scale Vesselness Filter. It enables accurate segmentation of PVS by predicting the optimal filtering scale based on the image’s noise level and resolution. The application includes interactive sliders for parameter tuning and advanced configuration options to refine the filtering process.
+
+For full context and methodology, see the [research paper](./paper/SCALR_PAPER.pdf) (PDF).
 
 ## Installation
 

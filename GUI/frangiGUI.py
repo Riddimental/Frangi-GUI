@@ -95,7 +95,7 @@ nii_file = []
 nii_3d_image = []
 nii_3d_image_original = []
 slice_portion = 100
-view_mode = ctk.StringVar(value="Axial")
+view_mode = ctk.StringVar(value="Fix Z")
 selection_image = Image.new("RGB",(200,200),(0,0,0))
 
 file_selected = False
@@ -196,15 +196,15 @@ def refresh_image():
 def plot_image():
     global max_value, nii_2d_image, nii_3d_image, slice_portion, max_slice
     # selecting a slice out of the 3d image
-    if(view_mode.get() == "Coronal"): # im the y axis "Coronal"
+    if(view_mode.get() == "Fix Y"): # im the y axis "Fix Y"
         max_slice = nii_3d_image.shape[1]
         if slice_portion >= nii_3d_image.shape[1]: slice_portion = (nii_3d_image.shape[1]-1)
         nii_2d_image = nii_3d_image[:,slice_portion,:]
-    elif(view_mode.get() == "Axial"): # im the z axis "Axial"
+    elif(view_mode.get() == "Fix Z"): # im the z axis "Fix Z"
         max_slice = nii_3d_image.shape[2]
         if slice_portion >= nii_3d_image.shape[2]: slice_portion = (nii_3d_image.shape[2]-1)
         nii_2d_image = nii_3d_image[:,:,slice_portion]
-    elif(view_mode.get() == "Sagittal"): # im the x axis "Sagital"
+    elif(view_mode.get() == "Fix X"): # im the x axis "Sagital"
         max_slice = nii_3d_image.shape[0]
         if slice_portion >= nii_3d_image.shape[0]: slice_portion = (nii_3d_image.shape[0]-1)
         nii_2d_image = nii_3d_image[slice_portion,:,:]
@@ -213,7 +213,7 @@ def plot_image():
     max_value = nii_2d_image.max()
     
     # rotate the figure 90 degrees and resize
-    nii_2d_image = np.rot90(nii_2d_image)
+    #nii_2d_image = np.rot90(nii_2d_image)
     nii_2d_image = cv2.resize(nii_2d_image, None, fx=2.4, fy=2.4)  # Resize to twice the size
     
     plt.imsave("temp/plot.jpeg", nii_2d_image, cmap='gray')
@@ -221,16 +221,13 @@ def plot_image():
     root.after(5, refresh_image())
     
     
-    #tk.Label(frangi_frame).pack(pady=0)
     segmentation_tabs.grid(row=3)
     frangi_frame.grid(row=4, padx=0)
     file_tools_frame.grid(row=5, pady=10, padx=20)
     apply_frangi_button.pack(pady=5)
     view_3D_button.pack(pady=5)
     save_file_button.pack(pady=5)
-    prepare_masking_button.pack(pady=5)
-    #save_mask_button.pack(pady=5)
-    #create_shell_button.pack(pady=5)
+    apply_overlay_button.pack(pady=5)
     slice_slider.configure(state="normal", to=max_slice)
     picture_canvas.pack(anchor="center", expand=True)
     filters_button.configure(state="normal")
@@ -390,14 +387,6 @@ def save_file():
     # obtain the data
     hold_button(save_file_button)
     data = nii_3d_image
-    '''# Define the percentage of the image dimensions to extract from the corner
-    corner_percentage = 0.05  # 5% of the image dimensions
-
-    # Calculate the size of the corner region
-    corner_size = [int(dim * corner_percentage) for dim in data.shape]
-
-    # Extract the corner sample (assuming the corner is at (0,0,0))
-    corner_sample = data[:corner_size[0], :corner_size[1], :corner_size[2]]'''
     
     # Open dialog window to save the file
     file_path = filedialog.asksaveasfilename(defaultextension=".nii", filetypes=[("NIfTI files", "*.nii"), ("All files", "*.*")])
@@ -410,26 +399,6 @@ def save_file():
     # Create a NIfTI From the data
     nii_file = nib.Nifti1Image(data, np.eye(4))  # listo mi rey, guarde el metadata aqui, graciassi es necesario
     nib.save(nii_file, file_path)
-    
-    '''
-    # Function to add Rician noise to an image
-    def add_rician_noise(image, sigma):
-        noise = np.random.normal(loc=0, scale=sigma, size=image.shape)
-        noisy_image = np.sqrt(image**2 + noise**2)
-        return noisy_image
-
-    # Function to create a noisy image with Rician noise
-    def create_noisy_image(base_image, sigma):
-        noisy_image = add_rician_noise(base_image, sigma)
-        return noisy_image
-    
-    sigmas = np.linspace(0, 1 , 11)
-    
-    for i, sigma in enumerate(sigmas):
-        noisy_image_1 = create_noisy_image(data, sigma)
-        nifti_img_1 = nib.Nifti1Image(noisy_image_1, affine=np.eye(4))
-        nib.save(nifti_img_1, f'ellipsoids_with_noise_sigma_{sigma:.1f}.nii.gz')
-    '''
     
     
     refresh_text("File saved: " + file_path)
@@ -471,28 +440,6 @@ def create_shell():
     nii_3d_image = nii_3d_image + nii_norm/700
     
     print("Outer shell created")
-
-
-def create_core():
-    global mask, nii_3d_image
-    # Get the original image (mask or object)
-    tomask = nii_3d_image_original
-    
-    # Compute the distance transform of the object (foreground)
-    distance_transform = distance_transform_edt(tomask == 1)  # EDT of the object
-    
-    outer_threshold = filters.mm2voxel(0.1)  # Outer limit of inner shell
-    inner_threshold = filters.mm2voxel(0.0)  # Inner limit of inner shell
-    
-    # Create the inner shell: Select voxels within the specified thresholds from the surface
-    mask = ((distance_transform > 0.5) & 
-                   (distance_transform <= 1)).astype(float)
-    
-    #nii_3d_image = mask  # Visualize the inner shell
-    
-    print("Inner shell created")
-
-
     
 def prepare_masking():
     hold_button(prepare_masking_button)
@@ -520,12 +467,12 @@ def change_alpha(val):
 def change_black_vessels():
     global black_vessels, isblack
     if black_vessels.get() == 1:
-        black_vessels_switch.configure(text="Black")
+        black_vessels_switch.configure(text="Dark")
         isblack = True
         print("Black Vessels True")
         refresh_text("Target: Black vessels")
     else:
-        black_vessels_switch.configure(text="White")
+        black_vessels_switch.configure(text="Bright")
         isblack = False
         print("Black Vessels False")
         refresh_text("Target: White vessels")
@@ -581,6 +528,22 @@ def change_scale_step(val):
     step_val = int(val)
     text_val = "Scale Step: {:}".format(step_val)
     step_value_label.configure(text=text_val)
+    
+def apply_overlay():
+    global nii_3d_image
+    temp = nii_3d_image
+    if apply_overlay_button.cget("text") == "Apply Overlay":
+        nii_norm = nii_3d_image_original/nii_3d_image_original.max()
+        nii_3d_image_norm = nii_3d_image/nii_3d_image.max()
+        nii_3d_image = nii_3d_image_norm + nii_norm/700
+        apply_overlay_button.configure(text="Remove Overlay")
+        refresh_text("Overlay applied")
+    else:
+        nii_3d_image = temp
+        apply_overlay_button.configure(text="Apply Overlay")
+        refresh_text("Overlay removed")
+    
+    plot_image()
  
 def restore_original():
     global gaussian_intensity, hVar1, hVar2, beta_val, step_val, nii_3d_image, nii_3d_image_original, threshold_value
@@ -673,7 +636,7 @@ def filters_window():
     filters_window.title("Image Filters Selector")
  
     # sets the geometry of toplevel
-    filters_window.geometry("350x420")
+    filters_window.geometry("390x470")
     filters_window.resizable(True, False)
     # Set the maximum width of the window
     filters_window.maxsize(700, filters_window.winfo_screenheight())
@@ -681,14 +644,20 @@ def filters_window():
     # spacer
     ctk.CTkLabel(master=filters_window,text="Filtering Options", height=40).pack(pady=15)
     
-    # frame grid for filters
-    filters_frame = ctk.CTkScrollableFrame(master=filters_window, width=300,height=230, orientation="horizontal")
-    filters_frame.pack(fill="x", expand=True, padx=15)
+    # Tabview for filter categories
+    filters_tabs = ctk.CTkTabview(master=filters_window, width=320, height=250)
+    filters_tabs.pack(padx=15, pady=10)
+
+    # Add tabs
+    filters_tabs.add("Gaussian")
+    filters_tabs.add("Mask")
+    filters_tabs.add("Frangi")
+    filters_tabs.add("Thresholding")
+    filters_tabs.add("Training")
+
     
     # Gaussian frame
-    gaussian_frame = ctk.CTkFrame(master=filters_frame)
-    gaussian_frame.grid(row=0, column=0, padx=15, pady=5)
-    #gaussian_frame.pack()
+    gaussian_frame = filters_tabs.tab("Gaussian")
     
     # Gaussian slider
     gaussian_label = ctk.CTkLabel(master=gaussian_frame, text="Gaussian Options", height=10)
@@ -722,8 +691,8 @@ def filters_window():
             plot_image()
     
     # Load mask
-    Load_mask_frame = ctk.CTkFrame(master=filters_frame)
-    Load_mask_frame.grid(row=0, column=1, padx=15, pady=5)
+    Load_mask_frame = filters_tabs.tab("Mask")
+
     #gaussian_frame.pack()
     
     # Load mask button
@@ -731,8 +700,7 @@ def filters_window():
     load_mask_button.pack(pady=5)
     
     # Scikit Frangi frame
-    sci_frangi_frame = ctk.CTkFrame(master=filters_frame)
-    sci_frangi_frame.grid(row=0, column=2, padx=15, pady=5)
+    sci_frangi_frame = filters_tabs.tab("Frangi")
     #gaussian_frame.pack()
     
     # Scikit Frangi slider
@@ -740,12 +708,11 @@ def filters_window():
     sci_frangi_label.pack(pady=15)
     
     # Scikit Frangi button
-    gaussian_button = ctk.CTkButton(master=sci_frangi_frame, text="old Frangi", command=apply_sci_frangi, width=120)
+    gaussian_button = ctk.CTkButton(master=sci_frangi_frame, text="Scikit Frangi", command=apply_sci_frangi, width=120)
     gaussian_button.pack(pady=5)
     
     # Thresholding frame
-    thresholding_frame = ctk.CTkFrame(master=filters_frame)
-    thresholding_frame.grid(row=0, column=3, padx=15, pady=5)
+    thresholding_frame = filters_tabs.tab("Thresholding")
     
     # Thresholding options
     thresholding_label = ctk.CTkLabel(master=thresholding_frame, text="Thresholding Options", height=10)
@@ -766,8 +733,7 @@ def filters_window():
     threshold_apply_button.pack(pady=5)
     
     # Training frame
-    training_frame = ctk.CTkFrame(master=filters_frame)
-    training_frame.grid(row=0, column=4, padx=15, pady=5)
+    training_frame = filters_tabs.tab("Training")
     
     # Traninig options
     training_label = ctk.CTkLabel(master=training_frame, text="Model Training", height=10)
@@ -841,7 +807,7 @@ view_frame = tk.Frame(canva_tools_frame)
 view_frame.grid(row=0, column=1, pady=10, padx = 10, sticky="ew")
 
 # Define the options for the segmented button
-view_options = ["Sagittal", "Coronal", "Axial"]
+view_options = ["Fix X", "Fix Y", "Fix Z"]
 
 def handle_segmented_button_selection(selection):
     view_mode.set(selection)
@@ -859,8 +825,8 @@ view_segmented_button = ctk.CTkSegmentedButton(
     command=handle_segmented_button_selection
 )
 view_segmented_button.pack(padx=10, fill="x", expand=True)
-# Set "Axial" as the default selection
-view_segmented_button.set("Axial")
+# Set "Fix Z" as the default selection
+view_segmented_button.set("Fix Z")
 
 # slice frame
 slice_frame = tk.Frame(canva_tools_frame)
@@ -889,7 +855,7 @@ logo_image = tk.PhotoImage(file="img/logo.png").subsample(4, 4)
 canvas_logo.create_image(50, 50, image=logo_image)
 
 # Title of the tool under the logo
-title_label = ctk.CTkLabel(logo_frame, text="MRI Frangi's \n Segmentation Tool")
+title_label = ctk.CTkLabel(logo_frame, text="PVS \n Segmentation Tool")
 title_label.grid(row=1, pady=5)
 
 # Upload Button
@@ -923,7 +889,7 @@ diameter_slider.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
 predict_button = ctk.CTkButton(basic_tab, text="Reading Noise",state="disabled", command=predict_scale)
 predict_button.grid(row=2, column=0, sticky='nsew', padx=5, pady=10)
 
-segmentation_tabs.add(basic_tab, text="Basic")
+segmentation_tabs.add(basic_tab, text="Modern")
 segmentation_tabs.bind("<<NotebookTabChanged>>", switch_mode)
 
 
@@ -949,20 +915,20 @@ scale_frame.pack(pady=(0,5))
 # scale step label
 text_val = "Scale Step: {:}".format(step_val)
 step_value_label = ctk.CTkLabel(scale_frame, text=text_val)
-step_value_label.pack(pady=2, padx=0, anchor='w')
+step_value_label.pack(pady=2, padx=0)
 
 # scale step slider
-max_val = 100
+max_val = 20
 scale_steps_slider = ctk.CTkSlider(master=scale_frame, from_=1, to=max_val,number_of_steps=max_val-1, command=change_scale_step, width=100)
 scale_steps_slider.set(step_val)
-scale_steps_slider.pack(pady=(0, 2), padx=0, anchor='w')
+scale_steps_slider.pack(pady=(0, 2), padx=0)
 
-segmentation_tabs.add(advanced_tab, text="Advanced")
+segmentation_tabs.add(advanced_tab, text="Classic")
 segmentation_tabs.bind("<<NotebookTabChanged>>", switch_mode)
 
 # alpha frame
 alpha_frame = tk.Frame(frangi_frame)
-alpha_frame.grid(row=2, column=1)
+#alpha_frame.grid(row=2, column=1)
 
 # alpha label
 text_val = "Alpha: {:.2f}".format(alpha_val)
@@ -976,7 +942,7 @@ alpha_slider.pack()
 
 # beta frame
 beta_frame = tk.Frame(frangi_frame)
-beta_frame.grid(row=3, column=1)
+#beta_frame.grid(row=3, column=1)
 
 # beta slider
 text_val = "Beta: {:.2f}".format(beta_val)
@@ -992,7 +958,7 @@ switch_label = ctk.CTkLabel(frangi_frame, text="Vessels:")
 switch_label.grid(row=4, column=1, pady=5)
 
 # switch to mark background and foreground
-black_vessels_switch = ctk.CTkSwitch(frangi_frame,text="Black", variable=black_vessels, command=change_black_vessels)
+black_vessels_switch = ctk.CTkSwitch(frangi_frame,text="Dark", variable=black_vessels, command=change_black_vessels)
 black_vessels_switch.grid(row=5, column=1, pady=1)
 
 #icons for sliders
@@ -1034,16 +1000,16 @@ c_icon_left = ImageTk.PhotoImage(c_icon_left_image)
 c_icon_right = ImageTk.PhotoImage(c_icon_right_image)
 
 alphaicon_label_left = tk.Label(frangi_frame, image=alphaicon_right)
-alphaicon_label_left.grid(row=2, column=0, padx=10, sticky='s')  
+#alphaicon_label_left.grid(row=2, column=0, padx=10, sticky='s')  
 
 alphaicon_label_right = tk.Label(frangi_frame, image=alphaicon_left)
-alphaicon_label_right.grid(row=2, column=2, padx=10, sticky='s')  
+#alphaicon_label_right.grid(row=2, column=2, padx=10, sticky='s')  
 
 betaicon_label_left = tk.Label(frangi_frame, image=betaicon_left)
-betaicon_label_left.grid(row=3, column=0, padx=10, sticky='s')  
+#betaicon_label_left.grid(row=3, column=0, padx=10, sticky='s')  
 
 betaicon_label_right = tk.Label(frangi_frame, image=betaicon_right)
-betaicon_label_right.grid(row=3, column=2, padx=10, sticky='s')  
+#betaicon_label_right.grid(row=3, column=2, padx=10, sticky='s')  
 
 # file tools frame
 file_tools_frame = tk.Frame(left_frame_canvas)
@@ -1052,7 +1018,7 @@ file_tools_frame = tk.Frame(left_frame_canvas)
 apply_frangi_button = ctk.CTkButton(file_tools_frame,text="Apply Frangi",command=apply_frangi)
 
 # 3D view button
-view_3D_button = ctk.CTkButton(file_tools_frame,text="3D View",command=open_napari)
+view_3D_button = ctk.CTkButton(file_tools_frame,text="3D Render",command=open_napari)
 
 # Process image segmentation button
 save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=save_file)
@@ -1060,6 +1026,7 @@ save_file_button = ctk.CTkButton(file_tools_frame, text="Save NIfTI", command=sa
 #create_shell_button = ctk.CTkButton(file_tools_frame, text="Create Shell", command=create_shell)
 prepare_masking_button = ctk.CTkButton(file_tools_frame, text="Prepare Masking", command=prepare_masking)
 #save_file_button = ctk.CTkButton(file_tools_frame, text="Create Noise", command=create_noise)
+apply_overlay_button = ctk.CTkButton(file_tools_frame, text="Apply Overlay", command=apply_overlay)
 
 root.bind("<Configure>", on_window_resize)
 

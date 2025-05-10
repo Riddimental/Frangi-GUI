@@ -174,7 +174,7 @@ def automate_mri_analysis(mri_images: list[nib.Nifti1Image], mask: nib.Nifti1Ima
       print('Processing ', Image_name)
       mri_image = filters.isometric_voxels(mri_image)
                   
-      noise_sigma, snr = filters.all_noise_measurements(mri_image.get_fdata())
+      noise_sigma, snr = filters.get_sigma_and_snr(mri_image.get_fdata())
       noisy_image_tensor = torch.from_numpy(mri_image.get_fdata())
       contrasts = process_image_get_contrasts(noisy_image_tensor, voxel_scales, 0.2, 0.8, mask, shell)
       voxel_best_scale = interpolate_and_find_best_scale(voxel_scales, contrasts)

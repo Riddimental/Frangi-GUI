@@ -57,7 +57,7 @@ print(comparison_df.head())
 # Predict Best Scale for New Data in mm
 def predict(image: nib.Nifti1Image) -> float:
    #obtain the SNR from the NIFTI image
-   noise, snr = ft.all_noise_measurements(image.get_fdata())
+   noise, snr = ft.get_sigma_and_snr(image.get_fdata())
    #make sure the NIFTI's voxels are isometric
    image = ft.isometric_voxels(image)
    #obtain the voxel size

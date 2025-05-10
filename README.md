@@ -109,7 +109,7 @@ Upon running the script, the graphical user interface (GUI) will open. From ther
 
 1. **Start Screen**: Upon opening the application, the first window will appear with an option to upload an image:
    
-   ![Start Window](screenshots/start.png)
+   ![Start Window](screenshots/Nstart.png)
 
 
 2. **Upload Image**: Select an MRI image in NIfTI format (.nii or .nii.gz):
@@ -119,7 +119,7 @@ Upon running the script, the graphical user interface (GUI) will open. From ther
 
 3. **Image Loaded**: Once the image is loaded, you'll see the first slice along with available customization tools:
 
-   ![Image Load](screenshots/coronal.png)
+   ![Image Load](screenshots/Ncoronal.png)
 
 
 4. **2D View Options**: Use the slider and any of the axes to adjust the preferred slice and perspective view:
@@ -131,7 +131,7 @@ Upon running the script, the graphical user interface (GUI) will open. From ther
 
    ![MRI 3D View](gifs/3d%20render.gif)
    ![CSO Mask 3D View](gifs/loading%20masks%202.gif)
-   ![Full Image After Filtering View](screenshots/3Dview.png)
+   ![Full Image After Filtering View](screenshots/N3Dview.png)
 
 
 6. **Extra Tools and Options**: Click the "More Options" button to interact with your image using tools like Gaussian blur, thresholding, or uploading a mask with the option to overlay it with the original for relative location comparison:
@@ -142,7 +142,7 @@ Upon running the script, the graphical user interface (GUI) will open. From ther
 
 7. **Automatic Scale Selection**: Click the **SCALR** button for automatic scale selection:
 
-   ![SCALR](screenshots/scalr.png)
+   ![SCALR](screenshots/Nscalr.png)
 
 
 8. **Apply Frangi Filter**: Click the **Apply Frangi** button to initiate the segmentation process, utilizing all the previously configured tools for a clean and accurate segmentation.

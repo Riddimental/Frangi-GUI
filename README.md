@@ -3,7 +3,7 @@
 
 ## Overview
 
-This repository contains the full implementation of **SCALR**, a machine learning–based tool developed as part of my **Laureate Thesis** in Systems and Computer Science Engineering. The thesis was awarded distinction for its contribution to optimizing the Frangi filter for improved perivascular space (PVS) quantification in brain MRI.
+This repository contains the full implementation of **SCALR**, a machine learning–based tool developed as part of my **Laureate Thesis** in Systems and Computer Science Engineering. The thesis was awarded distinction for its contribution to optimising the Frangi filter for improved perivascular space (PVS) quantification in brain MRI.
 
 SCALR provides a user-friendly interface for processing MRI data using Frangi's Multi-Scale Vesselness Filter. It enables accurate segmentation of PVS by predicting the optimal filtering scale based on the image's noise level and resolution. The application includes interactive sliders for parameter tuning and advanced configuration options to refine the filtering process.
 
@@ -145,7 +145,7 @@ Upon running the script, the graphical user interface (GUI) will open. From ther
    ![SCALR](screenshots/Nscalr.png)
 
 
-8. **Apply Frangi Filter**: Click the **Apply Frangi** button to initiate the segmentation process, utilizing all the previously configured tools for a clean and accurate segmentation.
+8. **Apply Frangi Filter**: Click the **Apply Frangi** button to initiate the segmentation process, utilising all the previously configured tools for a clean and accurate segmentation.
 
    ![Processing](gifs/full%20pvs%20segmentation.gif)
 
@@ -169,7 +169,7 @@ We welcome contributions! If you find a bug or have suggestions for new features
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [Apache License 2.0](LICENSE), a permissive open-source license that allows for free use, modification, and distribution for academic, commercial, and research purposes, provided that proper attribution is given.
 
 ---
 

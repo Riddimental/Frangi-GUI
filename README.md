@@ -1,5 +1,5 @@
-# Fangi's Multi-Scale Vesselness Filter GUI
-**Prevascular Spaces (PVS) Segmentation Tool**
+# Optimizing the Frangi Filter: SCALR – A Machine Learning Model for Scale Prediction in Perivascular Space Quantification
+**Prevascular Spaces (PVS) Segmentation GUI**
 
 ## Overview
 
